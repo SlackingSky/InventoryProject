@@ -1,327 +1,349 @@
-import React, { useState } from "react";
+import { useState, Fragment } from "react";
 import { Badge, MonoValue } from "./DataTable";
-import { Modal, Field, Select, Input, ConfirmDialog } from "./Modal";
+import { Modal, Field, Input, Select, FormGrid } from "./Modal";
 import { useData } from "../context/DataContext";
-import type { PurchaseOrder, PurchaseOrderDetail, DeliveryStatus } from "../data/mockData";
-import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, X, PackageCheck } from "lucide-react";
-import { Search } from "lucide-react";
+import type { PurchaseOrder, DeliveryStatus } from "../data/mockData";
+import { Plus, Pencil, Trash2, Package, ChevronRight, ChevronDown } from "lucide-react";
 
-const statusColors: Record<string, string> = { "Pending": "#f59e0b", "In Transit": "#3b82f6", "Delivered": "#10b981", "Cancelled": "#ef4444" };
-const statuses: DeliveryStatus[] = ["Pending", "In Transit", "Delivered", "Cancelled"];
-
-const readonlyFieldStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  borderRadius: 8,
-  border: "1px solid var(--border)",
-  background: "var(--muted)",
-  color: "var(--muted-foreground)",
-  fontSize: 13,
+type POForm = {
+  supplierID: number;
+  purchaseDate: string;
+  deliveryStatus: DeliveryStatus;
+  details: { productId: number; purchaseQuantity: number; unitCost: number; }[];
 };
 
-interface POForm {
-  supplierID: string;
-  purchaseDate: string;
-  receivedDate: string;
-  deliveryStatus: DeliveryStatus;
-  createdBy: string;
-  receivedBy: string;
-  details: Array<{ productID: string; purchaseQuantity: number; unitCost: number }>;
-}
+const blank = (): POForm => ({
+  supplierID: 0,
+  purchaseDate: new Date().toISOString().split("T")[0],
+  deliveryStatus: "Pending",
+  details: [],
+});
 
-function OrderDetail({ details, products }: { details: PurchaseOrderDetail[]; products: { productID: string; productName: string }[] }) {
-  return (
-    <div className="mx-4 mb-3 rounded-lg overflow-hidden" style={{ background: "var(--muted)", border: "1px solid var(--border)" }}>
-      <table className="w-full" style={{ fontSize: 12 }}>
-        <thead>
-          <tr style={{ borderBottom: "1px solid var(--border)" }}>
-            {["Detail ID", "Product", "Qty", "Unit Cost", "Total"].map((h) => (
-              <th key={h} className="px-3 py-2 text-center" style={{ color: "var(--muted-foreground)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {details.map((d, i) => (
-            <tr key={d.purchaseOrderDetailID} style={{ borderBottom: i < details.length - 1 ? "1px solid var(--border)" : "none" }}>
-              <td className="px-3 py-2 text-center"><MonoValue value={d.purchaseOrderDetailID} /></td>
-              <td className="px-3 py-2 text-center" style={{ color: "var(--foreground)" }}>{products.find((p) => p.productID === d.productID)?.productName ?? d.productID}</td>
-              <td className="px-3 py-2 text-center"><MonoValue value={d.purchaseQuantity} /></td>
-              <td className="px-3 py-2 text-center"><MonoValue value={`Php ${d.unitCost.toLocaleString("en-US", { minimumFractionDigits: 2 })}`} /></td>
-              <td className="px-3 py-2 text-center" style={{ fontWeight: 600, fontFamily: "var(--font-mono)" }}>Php {d.totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+const statusColors: Record<DeliveryStatus, string> = {
+  Pending: "#f59e0b",
+  "In Transit": "#3b82f6",
+  Delivered: "#10b981",
+  Cancelled: "#ef4444",
+};
 
-export function PurchaseOrders({ canAdd = true, canModify = true, canEdit = true }: { canAdd?: boolean; canModify?: boolean; canEdit?: boolean }) {
-  const { currentUserID, purchaseOrders, suppliers, products, users, addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder } = useData();
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [modal, setModal] = useState<"create" | "edit" | "delete" | null>(null);
-  const [form, setForm] = useState<POForm>({ supplierID: "", purchaseDate: new Date().toISOString().slice(0, 10), receivedDate: "", deliveryStatus: "Pending", createdBy: currentUserID, receivedBy: "", details: [{ productID: "", purchaseQuantity: 1, unitCost: 0 }] });
+export function PurchaseOrders({ canAdd = true, canModify = true, canEdit = true }: any) {
+  const { purchaseOrders, suppliers, products, warehouses, currentUserID, addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, addStockMovement } = useData();
+  
+  const [modal, setModal] = useState<"create" | "edit" | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"add" | "edit" | "delete" | "receive" | null>(null);
+  
+  const [form, setForm] = useState<POForm>(blank());
   const [selected, setSelected] = useState<PurchaseOrder | null>(null);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  
+  const [receiveWarehouse, setReceiveWarehouse] = useState<number>(0);
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
 
-  const toggle = (id: string) => setExpanded((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-
-  const openCreate = () => {
-    setForm({ supplierID: suppliers[0]?.supplierID ?? "", purchaseDate: new Date().toISOString().slice(0, 10), receivedDate: "", deliveryStatus: "Pending", createdBy: currentUserID, receivedBy: "", details: [{ productID: "", purchaseQuantity: 1, unitCost: 0 }] });
-    setError(""); setModal("create");
+  const toggleExpand = (id: number) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
+
+  const openCreate = () => { setForm(blank()); setError(""); setModal("create"); };
 
   const openEdit = (po: PurchaseOrder) => {
     setSelected(po);
-    setForm({ supplierID: po.supplierID, purchaseDate: po.purchaseDate, receivedDate: po.receivedDate ?? "", deliveryStatus: po.deliveryStatus, createdBy: po.createdBy, receivedBy: po.receivedBy ?? "", details: po.details.map((d) => ({ productID: d.productID, purchaseQuantity: d.purchaseQuantity, unitCost: d.unitCost })) });
-    setError(""); setModal("edit");
+    setForm({
+      supplierID: po.supplierID,
+      purchaseDate: po.purchaseDate,
+      deliveryStatus: po.deliveryStatus,
+      details: po.details ? po.details.map((d) => ({
+        productId: d.productId,
+        purchaseQuantity: d.purchaseQuantity,
+        unitCost: d.unitCost,
+      })) : [],
+    });
+    setError("");
+    setModal("edit");
   };
 
-  const openDelete = (po: PurchaseOrder) => { setSelected(po); setModal("delete"); };
+  const addItem = () => {
+    setForm(p => ({
+      ...p,
+      details: [...p.details, { productId: products[0]?.productID || 0, purchaseQuantity: 1, unitCost: products[0]?.price || 0 }]
+    }));
+  };
 
-  const handleReceive = (po: PurchaseOrder) => {
-    updatePurchaseOrder({
-      ...po,
-      deliveryStatus: "Delivered",
-      receivedDate: new Date().toISOString().slice(0, 10),
-      receivedBy: currentUserID,
+  const updateItem = (index: number, field: string, value: number) => {
+    setForm(p => {
+      const newDetails = [...p.details];
+      newDetails[index] = { ...newDetails[index], [field]: value };
+      if (field === "productId") {
+        const prod = products.find((pr) => pr.productID === value);
+        if (prod) newDetails[index].unitCost = prod.price;
+      }
+      return { ...p, details: newDetails };
     });
   };
 
-  const setF = <K extends keyof POForm>(k: K, v: POForm[K]) => setForm((p) => ({ ...p, [k]: v }));
-  const addDetailLine = () => setForm((p) => ({ ...p, details: [...p.details, { productID: products[0]?.productID ?? "", purchaseQuantity: 1, unitCost: 0 }] }));
-  const removeDetailLine = (idx: number) => setForm((p) => ({ ...p, details: p.details.filter((_, i) => i !== idx) }));
-  const setDetail = (idx: number, k: string, v: string | number) => setForm((p) => ({ ...p, details: p.details.map((d, i) => i === idx ? { ...d, [k]: v } : d) }));
+  const removeItem = (index: number) => {
+    setForm(p => ({ ...p, details: p.details.filter((_, i) => i !== index) }));
+  };
 
-  const handleSave = () => {
-    if (!form.supplierID) { setError("Supplier is required."); return; }
-    if (!form.purchaseDate) { setError("Purchase date is required."); return; }
-    if (form.details.some((d) => !d.productID)) { setError("All line items must have a product selected."); return; }
-    if (form.details.some((d) => d.purchaseQuantity < 1)) { setError("Quantity must be at least 1 for all line items."); return; }
+  const handlePreSave = () => {
+    if (!form.supplierID) return setError("Please select a supplier.");
+    if (!form.purchaseDate) return setError("Please enter a purchase date.");
+    if (form.details.length === 0) return setError("You must add at least one line item.");
 
-    const details: PurchaseOrderDetail[] = form.details.map((d, i) => ({
-      purchaseOrderDetailID: `POD${String(Date.now()).slice(-4)}${i}`,
-      purchaseOrderID: selected?.purchaseOrderID ?? "",
-      productID: d.productID,
-      purchaseQuantity: d.purchaseQuantity,
-      unitCost: d.unitCost,
-      totalAmount: d.purchaseQuantity * d.unitCost,
-    }));
+    const hasBadItems = form.details.some((d) => !d.productId || d.purchaseQuantity <= 0 || d.unitCost < 0);
+    if (hasBadItems) return setError("All line items must have a valid product and a quantity greater than zero.");
 
-    const po: Omit<PurchaseOrder, "purchaseOrderID"> = {
-      supplierID: form.supplierID,
-      purchaseDate: form.purchaseDate,
-      receivedDate: form.receivedDate || null,
-      // Status is always Pending on create; preserved from existing record on edit
-      deliveryStatus: modal === "create" ? "Pending" : form.deliveryStatus,
-      createdBy: form.createdBy,
-      receivedBy: form.receivedBy || null,
-      details,
-    };
+    setConfirmAction(modal === "create" ? "add" : "edit");
+  };
 
-    if (modal === "create") addPurchaseOrder(po);
-    else if (selected) updatePurchaseOrder({ ...po, purchaseOrderID: selected.purchaseOrderID });
+  const executeAction = async () => {
+    setError("");
+
+    if (confirmAction === "add") {
+      addPurchaseOrder({ ...form, createdBy: currentUserID });
+    } 
+    else if (confirmAction === "edit" && selected) {
+      updatePurchaseOrder({ ...selected, ...form });
+    } 
+    else if (confirmAction === "delete" && selected) {
+      deletePurchaseOrder(selected.purchaseOrderID);
+    } 
+    else if (confirmAction === "receive" && selected) {
+      if (!receiveWarehouse) {
+        setError("You must select a destination warehouse to auto-receive inventory.");
+        return; 
+      }
+
+      try {
+        await updatePurchaseOrder({
+          ...selected,
+          deliveryStatus: "Delivered",
+          receivedDate: new Date().toISOString().split("T")[0],
+          receivedBy: currentUserID
+        });
+
+        const movements = selected.details.map((item) => 
+          addStockMovement({
+            warehouseID: receiveWarehouse,
+            productID: item.productId,
+            movementType: "Stock In",
+            movementQuantity: item.purchaseQuantity,
+            movementReference: `PO-${selected.purchaseOrderID}`,
+            processedBy: currentUserID
+          })
+        );
+        
+        await Promise.all(movements);
+      } catch (err) {
+        setError("Failed to update Purchase Order. Stock movements were aborted.");
+        return;
+      }
+    }
+
+    setConfirmAction(null);
     setModal(null);
   };
 
-  const handleDelete = () => { if (selected) deletePurchaseOrder(selected.purchaseOrderID); setModal(null); };
-
-  const sorted = [...purchaseOrders]
-    .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())
-    .filter((po) => {
-      const s = search.toLowerCase();
-      return !s || po.purchaseOrderID.toLowerCase().includes(s) || (suppliers.find((x) => x.supplierID === po.supplierID)?.supplierName.toLowerCase().includes(s) ?? false) || po.deliveryStatus.toLowerCase().includes(s);
-    });
-
   const cols = [
-    { key: "expand",          label: "",            width: 36,  align: "center" },
-    { key: "purchaseOrderID", label: "PO Number",               align: "center" },
-    { key: "supplierID",      label: "Supplier",                align: "left"   },
-    { key: "purchaseDate",    label: "Order Date",              align: "center" },
-    { key: "receivedDate",    label: "Received",                align: "center" },
-    { key: "deliveryStatus",  label: "Status",                  align: "center" },
-    { key: "total",           label: "Order Total",             align: "center" },
-    { key: "items",           label: "Lines",                   align: "center" },
-    { key: "createdBy",       label: "Created By",              align: "left"   },
-    { key: "actions",         label: "",                        align: "center" },
-  ] as const;
-
-  const currentUserName = users.find((u) => u.userID === currentUserID)?.fullName ?? currentUserID;
+    { key: "expand", label: "", width: 36, align: "center" as const },
+    { key: "purchaseOrderID", label: "PO Number", align: "center" as const },
+    { key: "supplierName", label: "Supplier", align: "left" as const },
+    { key: "purchaseDate", label: "Order Date", align: "center" as const },
+    { key: "receivedDate", label: "Received", align: "center" as const },
+    { key: "deliveryStatus", label: "Status", align: "center" as const },
+    { key: "total", label: "Order Total", align: "right" as const },
+    { key: "items", label: "Lines", align: "center" as const },
+    { key: "createdByName", label: "Created By", align: "left" as const },
+    { key: "actions", label: "Actions", align: "center" as const },
+  ];
 
   return (
     <div className="space-y-4">
-      <div><h1 style={{ color: "var(--foreground)", marginBottom: 4 }}>Purchase Orders</h1><p style={{ color: "var(--muted-foreground)", fontSize: 13 }}>Procurement transactions sent to suppliers. Click the arrow to expand line items.</p></div>
+      <div>
+        <h1 className="text-xl font-bold mb-1 text-[var(--foreground)]">Purchase Orders</h1>
+        <p className="text-sm text-[var(--muted-foreground)]">Manage inbound orders and supplier shipments.</p>
+      </div>
 
-      <div className="rounded-xl overflow-hidden" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
-        <div className="flex items-center justify-between gap-4 px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
+      <div className="bg-[var(--card)] border border-[var(--border)] rounded-lg shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b border-[var(--border)]">
           <div>
-            <h2 style={{ color: "var(--foreground)", marginBottom: 2 }}>Purchase Order List</h2>
-            <p style={{ color: "var(--muted-foreground)", fontSize: 12 }}>{purchaseOrders.length} orders — expand to view line items</p>
+            <h3 className="text-sm font-semibold text-[var(--foreground)]">Orders List</h3>
+            <p className="text-xs text-[var(--muted-foreground)]">{purchaseOrders.length} total orders</p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--muted-foreground)" }} />
-              <input type="text" placeholder="Search orders..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 pr-3 py-1.5 rounded-lg" style={{ background: "var(--input-background)", border: "1px solid var(--border)", color: "var(--foreground)", fontSize: 13, outline: "none", width: 200 }} />
-            </div>
-            {canAdd && <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity" style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontSize: 13, fontWeight: 500 }}><Plus size={14} />New Order</button>}
-          </div>
+          {canAdd && (
+            <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
+              <Plus size={14} /> New Purchase Order
+            </button>
+          )}
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full" style={{ fontSize: 13, borderCollapse: "collapse" }}>
+          <table className="w-full text-sm border-collapse">
             <thead>
-              <tr style={{ background: "var(--muted)" }}>
-                {cols.map((col) => (
-                  <th key={col.key} className="px-4 py-3" style={{ textAlign: col.align, color: "var(--muted-foreground)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", width: col.width }}>
-                    {col.label}
-                  </th>
-                ))}
+              <tr className="bg-[var(--muted)] border-b border-[var(--border)]">
+                {cols.map((c) => <th key={c.key} className="px-4 py-3 font-medium text-[var(--muted-foreground)] text-xs uppercase tracking-wider" style={{ textAlign: c.align, width: c.width }}>{c.label}</th>)}
               </tr>
             </thead>
             <tbody>
-              {sorted.map((row, idx) => (
-                <React.Fragment key={row.purchaseOrderID}>
-                  <tr style={{ borderBottom: !expanded.has(row.purchaseOrderID) && idx < sorted.length - 1 ? "1px solid var(--border)" : "none" }} className="transition-colors hover:bg-[var(--muted)]">
-                    <td className="px-4 py-3" style={{ textAlign: "center" }}>
-                      <button onClick={() => toggle(row.purchaseOrderID)} style={{ color: "var(--muted-foreground)", display: "flex", alignItems: "center" }}>
-                        {expanded.has(row.purchaseOrderID) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3" style={{ textAlign: "center" }}><MonoValue value={row.purchaseOrderID} /></td>
-                    <td className="px-4 py-3" style={{ textAlign: "left", fontWeight: 500 }}>{suppliers.find((s) => s.supplierID === row.supplierID)?.supplierName ?? row.supplierID}</td>
-                    <td className="px-4 py-3" style={{ textAlign: "center" }}><MonoValue value={new Date(row.purchaseDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" })} /></td>
-                    <td className="px-4 py-3" style={{ textAlign: "center" }}><MonoValue value={row.receivedDate ? new Date(row.receivedDate).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" }) : "—"} /></td>
-                    <td className="px-4 py-3" style={{ textAlign: "center" }}><Badge label={row.deliveryStatus} color={statusColors[row.deliveryStatus]} /></td>
-                    <td className="px-4 py-3" style={{ textAlign: "center" }}><MonoValue value={`Php ${row.details.reduce((s, d) => s + d.totalAmount, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}`} /></td>
-                    <td className="px-4 py-3" style={{ textAlign: "center" }}><MonoValue value={row.details.length} /></td>
-                    <td className="px-4 py-3" style={{ textAlign: "left", fontSize: 12, color: "var(--muted-foreground)" }}>{users.find((u) => u.userID === row.createdBy)?.fullName ?? row.createdBy}</td>
-                    <td className="px-4 py-3" style={{ textAlign: "center" }}>
-                      {canEdit ? (
-                        <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => openEdit(row)} className="p-1.5 rounded-lg hover:bg-[var(--muted)] transition-colors" style={{ color: "var(--muted-foreground)" }}><Pencil size={13} /></button>
-                          <button onClick={() => openDelete(row)} className="p-1.5 rounded-lg hover:bg-[#ef444418] transition-colors" style={{ color: "#ef4444" }}><Trash2 size={13} /></button>
-                        </div>
-                      ) : (row.deliveryStatus !== "Delivered" && row.deliveryStatus !== "Cancelled") ? (
-                        <button
-                          onClick={() => handleReceive(row)}
-                          className="flex items-center gap-1 px-2 py-1 rounded-lg transition-colors hover:opacity-90"
-                          style={{ background: "#10b98118", color: "#10b981", fontSize: 11, fontWeight: 600 }}
-                          title="Mark as received"
-                        >
-                          <PackageCheck size={12} />
-                          Receive
+              {purchaseOrders.map((po) => {
+                const isExpanded = expanded.has(po.purchaseOrderID);
+                const totalAmount = po.details ? po.details.reduce((s, d) => s + (d.purchaseQuantity * d.unitCost), 0) : 0;
+
+                return (
+                  <Fragment key={po.purchaseOrderID}>
+                    <tr className={`border-b border-[var(--border)] transition-colors hover:bg-[var(--muted)] ${isExpanded ? "bg-[var(--muted)]" : ""}`}>
+                      <td className="px-4 py-3 text-center">
+                        <button onClick={() => toggleExpand(po.purchaseOrderID)} className="p-1 rounded text-[var(--muted-foreground)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                         </button>
-                      ) : null}
-                    </td>
-                  </tr>
-                  {expanded.has(row.purchaseOrderID) && (
-                    <tr style={{ borderBottom: idx < sorted.length - 1 ? "1px solid var(--border)" : "none" }}>
-                      <td colSpan={cols.length}>
-                        <OrderDetail details={row.details} products={products} />
+                      </td>
+                      <td className="px-4 py-3 text-center"><MonoValue value={po.purchaseOrderID} /></td>
+                      <td className="px-4 py-3 text-left font-medium text-[var(--foreground)]">{po.supplierName}</td>
+                      <td className="px-4 py-3 text-center text-[var(--muted-foreground)] text-xs">{new Date(po.purchaseDate).toLocaleDateString()}</td>
+                      <td className="px-4 py-3 text-center text-[var(--muted-foreground)] text-xs">{po.receivedDate ? new Date(po.receivedDate).toLocaleDateString() : "-"}</td>
+                      <td className="px-4 py-3 text-center"><Badge label={po.deliveryStatus} color={statusColors[po.deliveryStatus]} /></td>
+                      <td className="px-4 py-3 text-right"><MonoValue value={`Php ${totalAmount.toLocaleString()}`} /></td>
+                      <td className="px-4 py-3 text-center"><MonoValue value={po.details?.length || 0} /></td>
+                      <td className="px-4 py-3 text-left text-xs text-[var(--muted-foreground)]">{po.createdByName}</td>
+                      <td className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          {canModify && po.deliveryStatus !== "Delivered" && po.deliveryStatus !== "Cancelled" && (
+                            <button onClick={() => { 
+                              setSelected(po); 
+                              setReceiveWarehouse(warehouses[0]?.warehouseID || 0);
+                              setError(""); 
+                              setConfirmAction("receive"); 
+                            }} title="Mark as Delivered" className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors"><Package size={16} /></button>
+                          )}
+                          {canEdit && (
+                            <>
+                              <button onClick={() => openEdit(po)} title="Edit Order" className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors"><Pencil size={16} /></button>
+                              <button onClick={() => { setSelected(po); setError(""); setConfirmAction("delete"); }} title="Delete Order" className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition-colors"><Trash2 size={16} /></button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
-              {sorted.length === 0 && (
-                <tr><td colSpan={cols.length} className="py-10 text-center" style={{ color: "var(--muted-foreground)", fontSize: 13 }}>No purchase orders found.</td></tr>
-              )}
+
+                    {isExpanded && (
+                      <tr className="border-b border-[var(--border)] bg-[var(--background)]">
+                        <td colSpan={10} className="p-0">
+                          <div className="pl-14 pr-8 py-4 bg-black/5 dark:bg-white/5">
+                            <table className="w-full">
+                              <thead>
+                                <tr className="border-b border-[var(--border)]">
+                                  <th className="pb-2 text-left text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Product Name</th>
+                                  <th className="pb-2 text-center text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Qty</th>
+                                  <th className="pb-2 text-right text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Unit Cost</th>
+                                  <th className="pb-2 pr-4 text-right text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">Total</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {po.details?.map((item: any, i: number) => {
+                                  const p = products.find(prod => prod.productID === item.productId);
+                                  return (
+                                    <tr key={i} className={i !== po.details.length - 1 ? "border-b border-[var(--border)]" : ""}>
+                                      <td className="py-2 text-[var(--foreground)] font-medium text-sm">{p?.productName || "Unknown"}</td>
+                                      <td className="py-2 text-center text-sm"><MonoValue value={item.purchaseQuantity} /></td>
+                                      <td className="py-2 text-right text-sm"><MonoValue value={`Php ${item.unitCost.toLocaleString()}`} /></td>
+                                      <td className="py-2 pr-4 text-right text-sm font-medium"><MonoValue value={`Php ${(item.purchaseQuantity * item.unitCost).toLocaleString()}`} /></td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
-        <div className="px-5 py-3" style={{ borderTop: "1px solid var(--border)" }}>
-          <span style={{ color: "var(--muted-foreground)", fontSize: 12 }}>{sorted.length} of {purchaseOrders.length} orders</span>
-        </div>
       </div>
 
-      {/* Create / Edit Modal */}
-      <Modal title={modal === "create" ? "New Purchase Order" : "Edit Purchase Order"} open={modal === "create" || modal === "edit"} onClose={() => setModal(null)} onSubmit={handleSave} submitLabel={modal === "create" ? "Create Order" : "Save Changes"} size="lg">
-        {error && <div className="mb-4 px-3 py-2 rounded-lg" style={{ background: "#ef444418", color: "#ef4444", fontSize: 12 }}>{error}</div>}
-
-        <div className="grid gap-x-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+      {/* Form Modal */}
+      <Modal title={modal === "create" ? "New Purchase Order" : "Edit Purchase Order"} open={modal === "create" || modal === "edit"} onClose={() => setModal(null)} onSubmit={handlePreSave} submitLabel={modal === "create" ? "Create Order" : "Save Changes"} size="xl">
+        <div className="grid grid-cols-2 gap-4 mb-6 pb-6 border-b border-[var(--border)]">
           <Field label="Supplier" required>
-            <Select value={form.supplierID} onChange={(e) => setF("supplierID", e.target.value)}>
-              <option value="">Select supplier...</option>
-              {suppliers.map((s) => <option key={s.supplierID} value={s.supplierID}>{s.supplierName}</option>)}
+            <Select value={form.supplierID.toString()} onChange={(e) => setForm(p => ({ ...p, supplierID: parseInt(e.target.value) || 0 }))}>
+              <option value="0">Select supplier...</option>
+              {suppliers.map(s => <option key={s.supplierID} value={s.supplierID}>{s.supplierName}</option>)}
             </Select>
           </Field>
-          {/* Delivery Status — system-controlled (Pending on create, Delivered on receive) */}
-          <Field label="Delivery Status">
-            <div style={readonlyFieldStyle}>
-              <span style={{ color: statusColors[form.deliveryStatus], fontWeight: 600 }}>● </span>
-              {form.deliveryStatus}
-            </div>
-          </Field>
-          {/* Purchase Date — auto-set to today when created */}
-          <Field label="Order Date">
-            <div style={readonlyFieldStyle}>{new Date(form.purchaseDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "2-digit" })}</div>
-          </Field>
-          {/* Received Date — auto-set by Receive button */}
-          <Field label="Received Date">
-            <div style={readonlyFieldStyle}>
-              {form.receivedDate ? new Date(form.receivedDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "2-digit" }) : "— Not yet received —"}
-            </div>
-          </Field>
-          {/* Created By — locked to the logged-in user */}
-          <Field label="Created By">
-            <div style={readonlyFieldStyle}>{currentUserName}</div>
-          </Field>
-          {/* Received By — auto-set via Receive button */}
-          <Field label="Received By">
-            <div style={readonlyFieldStyle}>
-              {form.receivedBy ? (users.find((u) => u.userID === form.receivedBy)?.fullName ?? form.receivedBy) : "— Not yet received —"}
-            </div>
+          <Field label="Order Date" required>
+            <Input type="date" value={form.purchaseDate} onChange={(e) => setForm(p => ({ ...p, purchaseDate: e.target.value }))} />
           </Field>
         </div>
 
-        {/* Line items */}
-        <div className="mt-2 mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--foreground)" }}>Line Items <span style={{ color: "#ef4444" }}>*</span></label>
-            <button onClick={addDetailLine} className="flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-[var(--muted)] transition-colors" style={{ fontSize: 12, color: "var(--primary)" }}><Plus size={12} />Add Line</button>
-          </div>
-          <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--border)" }}>
-            <table className="w-full" style={{ fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
-                  {["Product", "Qty", "Unit Cost (Php)", "Total", ""].map((h) => (
-                    <th key={h} className="px-3 py-2 text-center" style={{ color: "var(--muted-foreground)", fontWeight: 600, fontSize: 11, textTransform: "uppercase" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {form.details.map((d, i) => (
-                  <tr key={i} style={{ borderBottom: i < form.details.length - 1 ? "1px solid var(--border)" : "none" }}>
-                    <td className="px-2 py-1.5">
-                      <select value={d.productID} onChange={(e) => setDetail(i, "productID", e.target.value)} style={{ width: "100%", padding: "4px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--input-background)", color: "var(--foreground)", fontSize: 12 }}>
-                        <option value="">Select...</option>
-                        {products.map((p) => <option key={p.productID} value={p.productID}>{p.productName}</option>)}
-                      </select>
-                    </td>
-                    <td className="px-2 py-1.5"><input type="number" min={1} value={d.purchaseQuantity} onChange={(e) => setDetail(i, "purchaseQuantity", parseInt(e.target.value) || 1)} style={{ width: 64, padding: "4px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--input-background)", color: "var(--foreground)", fontSize: 12 }} /></td>
-                    <td className="px-2 py-1.5"><input type="number" min={0} step={0.01} value={d.unitCost} onChange={(e) => setDetail(i, "unitCost", parseFloat(e.target.value) || 0)} style={{ width: 90, padding: "4px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--input-background)", color: "var(--foreground)", fontSize: 12 }} /></td>
-                    <td className="px-3 py-1.5" style={{ fontFamily: "var(--font-mono)", fontWeight: 600, color: "var(--foreground)" }}>Php {(d.purchaseQuantity * d.unitCost).toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                    <td className="px-2 py-1.5">
-                      {form.details.length > 1 && <button onClick={() => removeDetailLine(i)} style={{ color: "#ef4444", display: "flex", alignItems: "center" }}><X size={14} /></button>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr style={{ borderTop: "1px solid var(--border)", background: "var(--muted)" }}>
-                  <td colSpan={3} className="px-3 py-2 text-right" style={{ fontWeight: 600, fontSize: 12, color: "var(--muted-foreground)" }}>Order Total</td>
-                  <td className="px-3 py-2 text-center" style={{ fontFamily: "var(--font-mono)", fontWeight: 700, fontSize: 13, color: "var(--foreground)" }}>
-                    Php {form.details.reduce((s, d) => s + d.purchaseQuantity * d.unitCost, 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                  </td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+        <div className="mb-2 flex items-center justify-between">
+          <label className="text-sm font-semibold text-[var(--foreground)]">Line Items</label>
+          <button type="button" onClick={addItem} className="text-xs font-medium px-2 py-1 rounded bg-[var(--muted)] text-[var(--foreground)] hover:brightness-95 transition-colors">+ Add Item</button>
+        </div>
+
+        <div className="space-y-2">
+          {form.details.map((item, index) => (
+            <div key={index} className="flex gap-2 items-start p-3 rounded-lg bg-[var(--muted)] border border-[var(--border)]">
+              <div className="flex-1">
+                <Select value={item.productId.toString()} onChange={(e) => updateItem(index, "productId", parseInt(e.target.value) || 0)}>
+                  <option value="0">Select product...</option>
+                  {products.map(p => <option key={p.productID} value={p.productID}>{p.productName}</option>)}
+                </Select>
+              </div>
+              <div className="w-24">
+                <Input type="number" min={1} placeholder="Qty" value={item.purchaseQuantity} onChange={(e) => updateItem(index, "purchaseQuantity", parseInt(e.target.value) || 0)} />
+              </div>
+              <div className="w-32">
+                <Input type="number" min={0} step="0.01" placeholder="Unit Cost" value={item.unitCost} onChange={(e) => updateItem(index, "unitCost", parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="w-32 py-2 text-right text-sm font-medium text-[var(--foreground)]">
+                Php {(item.purchaseQuantity * item.unitCost).toLocaleString()}
+              </div>
+              <button type="button" onClick={() => removeItem(index)} className="p-2 text-red-500 hover:bg-red-500/10 rounded-md transition-colors"><Trash2 size={16} /></button>
+            </div>
+          ))}
+          {form.details.length === 0 && (
+            <div className="p-8 text-center rounded-lg border border-dashed border-[var(--border)] text-[var(--muted-foreground)] text-sm">No items added to this order yet.</div>
+          )}
         </div>
       </Modal>
 
-      <ConfirmDialog open={modal === "delete"} onClose={() => setModal(null)} onConfirm={handleDelete} label={selected?.purchaseOrderID ?? ""} />
+      {/* Universal Confirmation Modal */}
+      <Modal title={confirmAction === "receive" ? "Receive Order" : "Confirm Action"} open={!!confirmAction} onClose={() => setConfirmAction(null)} onSubmit={executeAction} submitLabel="Yes, Proceed" size="sm">
+        {error && <div className="mb-4 px-3 py-2 rounded bg-red-50 text-red-600 text-sm border border-red-100">{error}</div>}
+        
+        <div className="p-2 text-sm text-[var(--foreground)]">
+          {confirmAction === "receive" ? (
+            <>
+              <p className="mb-4">You are about to mark this order as <strong>Delivered</strong>.</p>
+              <Field label="Destination Warehouse" required>
+                <Select value={receiveWarehouse.toString()} onChange={(e) => setReceiveWarehouse(parseInt(e.target.value) || 0)}>
+                  <option value="0">Select warehouse...</option>
+                  {warehouses.map(w => <option key={w.warehouseID} value={w.warehouseID}>{w.warehouseName}</option>)}
+                </Select>
+              </Field>
+              <div className="mt-4 text-xs text-emerald-600 font-medium bg-emerald-50 p-2 rounded">
+                Automation: This will instantly update the status and inject all line items into your live inventory.
+              </div>
+            </>
+          ) : (
+            <>
+              Are you sure you want to <strong>{
+                confirmAction === "add" ? "create this new purchase order" :
+                confirmAction === "edit" ? "save changes to this purchase order" :
+                "delete this purchase order"
+              }</strong>?
+              {confirmAction === "delete" && <div className="mt-2 text-xs text-red-500 font-medium">Warning: This action cannot be undone and will delete all associated line items.</div>}
+            </>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

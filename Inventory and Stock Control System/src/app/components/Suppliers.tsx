@@ -1,65 +1,86 @@
 import { useState } from "react";
 import { DataTable, MonoValue } from "./DataTable";
-import { Modal, Field, Input, FormGrid, ConfirmDialog } from "./Modal";
+import { Modal, Field, Input, FormGrid } from "./Modal";
 import { useData } from "../context/DataContext";
 import type { Supplier } from "../data/mockData";
-import { Plus, Pencil, Trash2, Mail, Phone, MapPin } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 
-const blank = (): Omit<Supplier, "supplierID"> => ({ supplierName: "", contactNumber: "", emailAddress: "", supplierAddress: "" });
+type SupplierForm = Omit<Supplier, "supplierID">;
+const blank = (): SupplierForm => ({ supplierName: "", contactNumber: "", emailAddress: "", supplierAddress: "" });
 
 export function Suppliers({ canAdd = true, canModify = true }: { canAdd?: boolean; canModify?: boolean }) {
-  const { suppliers, products, addSupplier, updateSupplier, deleteSupplier } = useData();
-  const [modal, setModal] = useState<"create" | "edit" | "delete" | null>(null);
-  const [form, setForm] = useState(blank());
+  const { suppliers, addSupplier, updateSupplier, deleteSupplier } = useData();
+  const [modal, setModal] = useState<"create" | "edit" | null>(null);
+  const [confirmAction, setConfirmAction] = useState<"add" | "edit" | "delete" | null>(null);
+  const [form, setForm] = useState<SupplierForm>(blank());
   const [selected, setSelected] = useState<Supplier | null>(null);
   const [error, setError] = useState("");
 
   const openCreate = () => { setForm(blank()); setError(""); setModal("create"); };
   const openEdit = (s: Supplier) => { setSelected(s); setForm({ supplierName: s.supplierName, contactNumber: s.contactNumber, emailAddress: s.emailAddress, supplierAddress: s.supplierAddress }); setError(""); setModal("edit"); };
-  const openDelete = (s: Supplier) => { setSelected(s); setModal("delete"); };
+  const openDelete = (s: Supplier) => { setSelected(s); setConfirmAction("delete"); };
 
-  const handleSave = () => {
-    if (!form.supplierName.trim()) { setError("Supplier name is required."); return; }
-    if (!form.emailAddress.trim()) { setError("Email address is required."); return; }
-    if (modal === "create") addSupplier(form);
-    else if (selected) updateSupplier({ ...selected, ...form });
+  const handlePreSave = () => {
+    if (!form.supplierName.trim()) return setError("Supplier name is required.");
+    if (!form.contactNumber.trim()) return setError("Contact number is required.");
+    if (!form.emailAddress.trim()) return setError("Email address is required.");
+    if (!form.emailAddress.includes("@")) return setError("Please enter a valid email address.");
+    if (!form.supplierAddress.trim()) return setError("Address is required.");
+    setConfirmAction(modal === "create" ? "add" : "edit");
+  };
+
+  const executeAction = () => {
+    if (confirmAction === "add") addSupplier(form);
+    else if (confirmAction === "edit" && selected) updateSupplier({ ...selected, ...form });
+    else if (confirmAction === "delete" && selected) deleteSupplier(selected.supplierID);
+    setConfirmAction(null);
     setModal(null);
   };
 
-  const handleDelete = () => { if (selected) deleteSupplier(selected.supplierID); setModal(null); };
-  const set = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }));
+  const set = <K extends keyof SupplierForm>(k: K, v: SupplierForm[K]) => setForm((p) => ({ ...p, [k]: v }));
 
   const columns = [
-    { key: "supplierID", label: "ID", sortable: true, width: "100px", render: (row: Supplier) => <MonoValue value={row.supplierID} /> },
-    { key: "supplierName", label: "Supplier Name", sortable: true, align: "left" as const },
-    { key: "contactNumber", label: "Phone", align: "left" as const, render: (row: Supplier) => <span className="flex items-center gap-1" style={{ fontSize: 12, color: "var(--muted-foreground)" }}><Phone size={12} />{row.contactNumber}</span> },
-    { key: "emailAddress", label: "Email", align: "left" as const, render: (row: Supplier) => <span className="flex items-center gap-1" style={{ fontSize: 12, color: "#3b82f6" }}><Mail size={12} />{row.emailAddress}</span> },
-    { key: "supplierAddress", label: "Address", align: "left" as const, render: (row: Supplier) => <span className="flex items-center gap-1" style={{ fontSize: 12, color: "var(--muted-foreground)" }}><MapPin size={12} />{row.supplierAddress}</span> },
-    { key: "productCount", label: "Products", render: (row: Supplier) => <MonoValue value={products.filter((p) => p.supplierID === row.supplierID).length} /> },
-    ...(canModify ? [{ key: "actions", label: "", width: "80px", render: (row: Supplier) => (
+    { key: "supplierID", label: "ID", sortable: true, width: "100px", render: (r: Supplier) => <MonoValue value={r.supplierID} /> },
+    { key: "supplierName", label: "Supplier Name", sortable: true, align: "left" as const, render: (r: Supplier) => <span style={{ fontWeight: 500 }}>{r.supplierName}</span> },
+    { key: "contactNumber", label: "Phone", align: "left" as const, render: (r: Supplier) => <span style={{ color: "var(--muted-foreground)", fontSize: 13 }}>{r.contactNumber}</span> },
+    { key: "emailAddress", label: "Email", align: "left" as const, render: (r: Supplier) => <span style={{ color: "var(--muted-foreground)", fontSize: 13 }}>{r.emailAddress}</span> },
+    { key: "supplierAddress", label: "Address", align: "left" as const, render: (r: Supplier) => <span style={{ color: "var(--muted-foreground)", fontSize: 13 }}>{r.supplierAddress}</span> },
+    ...(canModify ? [{ key: "actions", label: "", width: "80px", render: (r: Supplier) => (
       <div className="flex items-center gap-1">
-        <button onClick={() => openEdit(row)} className="p-1.5 rounded-lg hover:bg-[var(--muted)] transition-colors" style={{ color: "var(--muted-foreground)" }}><Pencil size={13} /></button>
-        <button onClick={() => openDelete(row)} className="p-1.5 rounded-lg hover:bg-[#ef444418] transition-colors" style={{ color: "#ef4444" }}><Trash2 size={13} /></button>
+        <button onClick={() => openEdit(r)} className="p-1.5 rounded-lg hover:bg-[var(--muted)] transition-colors" style={{ color: "var(--muted-foreground)" }}><Pencil size={13} /></button>
+        <button onClick={() => openDelete(r)} className="p-1.5 rounded-lg hover:bg-[#ef444418] transition-colors" style={{ color: "#ef4444" }}><Trash2 size={13} /></button>
       </div>
-    )}] : []),
+    )}] : [])
   ];
 
   return (
     <div className="space-y-4">
-      <div><h1 style={{ color: "var(--foreground)", marginBottom: 4 }}>Suppliers</h1><p style={{ color: "var(--muted-foreground)", fontSize: 13 }}>Vendor directory for all electronics suppliers.</p></div>
-      <DataTable title="Supplier Directory" subtitle={`${suppliers.length} registered suppliers`} columns={columns} data={suppliers} searchFields={["supplierName", "emailAddress"]} rowKey={(r) => r.supplierID}
-        actions={canAdd ? <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity" style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontSize: 13, fontWeight: 500 }}><Plus size={14} />Add Supplier</button> : undefined}
+      <div>
+        <h1 style={{ color: "var(--foreground)", marginBottom: 4 }}>Vendors & Suppliers</h1>
+        <p style={{ color: "var(--muted-foreground)", fontSize: 13 }}>Manage contact information for your supply chain.</p>
+      </div>
+
+      <DataTable 
+        title="Supplier Directory" subtitle={`${suppliers.length} active suppliers`} columns={columns} data={suppliers} searchFields={["supplierName", "emailAddress"]} rowKey={(r) => r.supplierID}
+        actions={canAdd ? <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity" style={{ background: "var(--primary)", color: "var(--primary-foreground)", fontSize: 13, fontWeight: 500 }}><Plus size={14} /> Add Supplier</button> : undefined}
       />
-      <Modal title={modal === "create" ? "Add Supplier" : "Edit Supplier"} open={modal === "create" || modal === "edit"} onClose={() => setModal(null)} onSubmit={handleSave} submitLabel={modal === "create" ? "Create" : "Save Changes"}>
+
+      <Modal title={modal === "create" ? "Add Supplier" : "Edit Supplier"} open={modal === "create" || modal === "edit"} onClose={() => setModal(null)} onSubmit={handlePreSave} submitLabel={modal === "create" ? "Create Supplier" : "Save Changes"} size="md">
         {error && <div className="mb-4 px-3 py-2 rounded-lg" style={{ background: "#ef444418", color: "#ef4444", fontSize: 12 }}>{error}</div>}
-        <Field label="Supplier Name" required><Input placeholder="e.g. TechCore Distributors" value={form.supplierName} onChange={(e) => set("supplierName", e.target.value)} /></Field>
+        <Field label="Supplier Name" required><Input placeholder="e.g. Apple Inc." value={form.supplierName} onChange={(e) => set("supplierName", e.target.value)} /></Field>
         <FormGrid>
-          <Field label="Contact Number"><Input placeholder="(+63) 912-345-6789" value={form.contactNumber} onChange={(e) => set("contactNumber", e.target.value)} /></Field>
-          <Field label="Email Address" required><Input type="email" placeholder="orders@supplier.com" value={form.emailAddress} onChange={(e) => set("emailAddress", e.target.value)} /></Field>
+          <Field label="Phone Number" required><Input placeholder="+1 (555) 000-0000" value={form.contactNumber} onChange={(e) => set("contactNumber", e.target.value)} /></Field>
+          <Field label="Email Address" required><Input type="email" placeholder="vendor@example.com" value={form.emailAddress} onChange={(e) => set("emailAddress", e.target.value)} /></Field>
         </FormGrid>
-        <Field label="Address"><Input placeholder="123 Main St, City, State ZIP" value={form.supplierAddress} onChange={(e) => set("supplierAddress", e.target.value)} /></Field>
+        <Field label="Physical Address" required><Input placeholder="123 Corporate Way, City, State, Zip" value={form.supplierAddress} onChange={(e) => set("supplierAddress", e.target.value)} /></Field>
       </Modal>
-      <ConfirmDialog open={modal === "delete"} onClose={() => setModal(null)} onConfirm={handleDelete} label={selected?.supplierName ?? ""} />
+
+      <Modal title="Confirm Action" open={!!confirmAction} onClose={() => setConfirmAction(null)} onSubmit={executeAction} submitLabel="Yes, Proceed" size="sm">
+        <div className="p-2 text-sm" style={{ color: "var(--foreground)" }}>
+          Are you sure you want to <strong>{confirmAction === "add" ? "add this new" : confirmAction === "edit" ? "save changes to this" : "delete this"}</strong> supplier?
+          {confirmAction === "delete" && <div className="mt-2 text-xs text-red-500">Warning: Deleting a supplier will affect all associated purchase orders.</div>}
+        </div>
+      </Modal>
     </div>
   );
 }

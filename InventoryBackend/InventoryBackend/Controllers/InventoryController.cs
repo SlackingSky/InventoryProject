@@ -31,6 +31,8 @@ namespace InventoryBackend.Controllers
                             list.Add(new InventoryResponse
                             {
                                 InventoryID = Convert.ToInt32(reader["InventoryID"]),
+                                ProductID = Convert.ToInt32(reader["ProductID"]),
+                                WarehouseID = Convert.ToInt16(reader["WarehouseID"]),
                                 ProductName = reader["ProductName"].ToString(),
                                 WarehouseName = reader["WarehouseName"].ToString(),
                                 ProductQuantity = Convert.ToInt32(reader["ProductQuantity"])

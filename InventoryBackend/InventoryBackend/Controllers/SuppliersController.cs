@@ -1,7 +1,7 @@
-﻿using InventoryBackend.Models;
-using InventoryBackend.Utils;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using MySql.Data.MySqlClient;
+using InventoryBackend.Models;
+using InventoryBackend.Utils;
 using System.Data;
 
 namespace InventoryBackend.Controllers
@@ -58,6 +58,46 @@ namespace InventoryBackend.Controllers
                     await cmd.ExecuteNonQueryAsync();
                 }
                 return Ok(new { message = "Supplier added!" });
+            }
+            catch (MySqlException ex) { return this.HandleDbError(ex); }
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutAsync(int id, [FromBody] SupplierRequest request)
+        {
+            try
+            {
+                using (var conn = new MySqlConnection(_connectionString))
+                using (var cmd = new MySqlCommand("sp_UpdateSupplier", conn))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@p_ID", id);
+                    cmd.Parameters.AddWithValue("@p_Name", request.SupplierName);
+                    cmd.Parameters.AddWithValue("@p_Contact", request.ContactNumber);
+                    cmd.Parameters.AddWithValue("@p_Email", request.EmailAddress);
+                    cmd.Parameters.AddWithValue("@p_Address", request.SupplierAddress);
+                    await conn.OpenAsync();
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                return Ok(new { message = "Supplier updated!" });
+            }
+            catch (MySqlException ex) { return this.HandleDbError(ex); }
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteAsync(int id)
+        {
+            try
+            {
+                using (var conn = new MySqlConnection(_connectionString))
+                using (var cmd = new MySqlCommand("sp_DeleteSupplier", conn))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@p_ID", id);
+                    await conn.OpenAsync();
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                return Ok(new { message = "Supplier deleted!" });
             }
             catch (MySqlException ex) { return this.HandleDbError(ex); }
         }

@@ -1,7 +1,7 @@
-﻿using InventoryBackend.Models;
-using InventoryBackend.Utils;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using MySql.Data.MySqlClient;
+using InventoryBackend.Models;
+using InventoryBackend.Utils;
 using System.Data;
 
 namespace InventoryBackend.Controllers
@@ -55,7 +55,45 @@ namespace InventoryBackend.Controllers
                 }
                 return Ok(new { message = "Warehouse added!" });
             }
-            catch (MySqlException ex) { return StatusCode(500, new { error = ex.Message }); }
+            catch (MySqlException ex) { return this.HandleDbError(ex); }
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutAsync(short id, [FromBody] WarehouseRequest request)
+        {
+            try
+            {
+                using (var conn = new MySqlConnection(_connectionString))
+                using (var cmd = new MySqlCommand("sp_UpdateWarehouse", conn))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@p_ID", id);
+                    cmd.Parameters.AddWithValue("@p_Name", request.WarehouseName);
+                    cmd.Parameters.AddWithValue("@p_Location", request.WarehouseLocation);
+                    await conn.OpenAsync();
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                return Ok(new { message = "Warehouse updated!" });
+            }
+            catch (MySqlException ex) { return this.HandleDbError(ex); }
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteAsync(short id)
+        {
+            try
+            {
+                using (var conn = new MySqlConnection(_connectionString))
+                using (var cmd = new MySqlCommand("sp_DeleteWarehouse", conn))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@p_ID", id);
+                    await conn.OpenAsync();
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                return Ok(new { message = "Warehouse deleted!" });
+            }
+            catch (MySqlException ex) { return this.HandleDbError(ex); }
         }
     }
 }

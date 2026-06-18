@@ -57,5 +57,43 @@ namespace InventoryBackend.Controllers
             }
             catch (MySqlException ex) { return this.HandleDbError(ex); }
         }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> PutAsync(short id, [FromBody] CategoryRequest request)
+        {
+            try
+            {
+                using (var conn = new MySqlConnection(_connectionString))
+                using (var cmd = new MySqlCommand("sp_UpdateCategory", conn))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@p_ID", id);
+                    cmd.Parameters.AddWithValue("@p_Name", request.CategoryName);
+                    cmd.Parameters.AddWithValue("@p_Desc", request.CategoryDescription);
+                    await conn.OpenAsync();
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                return Ok(new { message = "Category updated!" });
+            }
+            catch (MySqlException ex) { return this.HandleDbError(ex); }
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteAsync(short id)
+        {
+            try
+            {
+                using (var conn = new MySqlConnection(_connectionString))
+                using (var cmd = new MySqlCommand("sp_DeleteCategory", conn))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@p_ID", id);
+                    await conn.OpenAsync();
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                return Ok(new { message = "Category deleted!" });
+            }
+            catch (MySqlException ex) { return this.HandleDbError(ex); }
+        }
     }
 }

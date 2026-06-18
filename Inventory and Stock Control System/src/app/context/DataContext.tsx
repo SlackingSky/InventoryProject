@@ -1,130 +1,186 @@
-import React, { createContext, useContext, useState } from "react";
-import {
-  users as initialUsers,
-  categories as initialCategories,
-  suppliers as initialSuppliers,
-  warehouses as initialWarehouses,
-  products as initialProducts,
-  inventory as initialInventory,
-  stockMovements as initialMovements,
-  purchaseOrders as initialPOs,
-} from "../data/mockData";
+import React, { createContext, useContext, useState, useEffect } from "react";
 import type {
-  User, Category, Supplier, Warehouse, Product,
-  Inventory, StockMovement, PurchaseOrder,
+    User, Category, Supplier, Warehouse, Product,
+    Inventory, StockMovement, PurchaseOrder,
 } from "../data/mockData";
+
+//const API_URL = "https://localhost:7131/api";
+const API_URL = "https://demanding-envy-isolation.ngrok-free.dev/api";
 
 interface DataContextType {
-  currentUserID: string;
-  users: User[];
-  categories: Category[];
-  suppliers: Supplier[];
-  warehouses: Warehouse[];
-  products: Product[];
-  inventory: Inventory[];
-  stockMovements: StockMovement[];
-  purchaseOrders: PurchaseOrder[];
+    currentUserID: number;
+    users: User[];
+    categories: Category[];
+    suppliers: Supplier[];
+    warehouses: Warehouse[];
+    products: Product[];
+    inventory: Inventory[];
+    stockMovements: StockMovement[];
+    purchaseOrders: PurchaseOrder[];
 
-  addUser: (u: Omit<User, "userID">) => void;
-  updateUser: (u: User) => void;
-  deleteUser: (id: string) => void;
+    addCategory: (c: Omit<Category, "categoryId">) => void;
+    updateCategory: (c: Category) => void;
+    deleteCategory: (id: number) => void;
 
-  addCategory: (c: Omit<Category, "categoryID">) => void;
-  updateCategory: (c: Category) => void;
-  deleteCategory: (id: string) => void;
+    addSupplier: (s: Omit<Supplier, "supplierId">) => void;
+    updateSupplier: (s: Supplier) => void;
+    deleteSupplier: (id: number) => void;
 
-  addSupplier: (s: Omit<Supplier, "supplierID">) => void;
-  updateSupplier: (s: Supplier) => void;
-  deleteSupplier: (id: string) => void;
+    addWarehouse: (w: Omit<Warehouse, "warehouseId">) => void;
+    updateWarehouse: (w: Warehouse) => void;
+    deleteWarehouse: (id: number) => void;
 
-  addWarehouse: (w: Omit<Warehouse, "warehouseID">) => void;
-  updateWarehouse: (w: Warehouse) => void;
-  deleteWarehouse: (id: string) => void;
+    addProduct: (p: any) => void;
+    updateProduct: (p: any) => void;
+    deleteProduct: (id: number) => void;
 
-  addProduct: (p: Omit<Product, "productID">) => void;
-  updateProduct: (p: Product) => void;
-  deleteProduct: (id: string) => void;
+    addStockMovement: (m: any) => void;
+    deleteStockMovement: (id: number) => void;
 
-  addInventory: (i: Omit<Inventory, "inventoryID">) => void;
-  updateInventory: (i: Inventory) => void;
-  deleteInventory: (id: string) => void;
+    addPurchaseOrder: (po: any) => void;
+    updatePurchaseOrder: (po: any) => void;
+    deletePurchaseOrder: (id: number) => void;
 
-  addStockMovement: (m: Omit<StockMovement, "stockMovementID">) => void;
-  updateStockMovement: (m: StockMovement) => void;
-  deleteStockMovement: (id: string) => void;
-
-  addPurchaseOrder: (po: Omit<PurchaseOrder, "purchaseOrderID">) => void;
-  updatePurchaseOrder: (po: PurchaseOrder) => void;
-  deletePurchaseOrder: (id: string) => void;
+    addInventory: (i: any) => void;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
 
-function nextId(prefix: string, existing: string[]): string {
-  const nums = existing
-    .map((id) => parseInt(id.replace(/\D/g, ""), 10))
-    .filter((n) => !isNaN(n));
-  const next = nums.length ? Math.max(...nums) + 1 : 1;
-  return `${prefix}${String(next).padStart(3, "0")}`;
-}
+export function DataProvider({ children, currentUserID }: { children: React.ReactNode; currentUserID: number }) {
+    const [users, setUsers] = useState<User[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+    const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [inventory, setInventory] = useState<Inventory[]>([]);
+    const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
+    const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
 
-function nextPoId(existing: string[]): string {
-  const nums = existing.map((id) => parseInt(id.replace(/\D/g, ""), 10)).filter((n) => !isNaN(n));
-  const next = nums.length ? Math.max(...nums) + 1 : 1;
-  return `PO-2026-${String(next).padStart(4, "0")}`;
-}
+    useEffect(() => {
+        const fetchAllData = async () => {
+            try {
+                const [catRes, supRes, whRes, invRes, prodRes, poRes, usrRes, movRes] = await Promise.all([
+                    fetch(`${API_URL}/Categories`),
+                    fetch(`${API_URL}/Suppliers`),
+                    fetch(`${API_URL}/Warehouses`),
+                    fetch(`${API_URL}/Inventory`),
+                    fetch(`${API_URL}/Products`),
+                    fetch(`${API_URL}/PurchaseOrders`),
+                    fetch(`${API_URL}/Users`),
+                    fetch(`${API_URL}/StockMovements`)
+                ]);
 
-export function DataProvider({ children, currentUserID }: { children: React.ReactNode; currentUserID: string }) {
-  const [users, setUsers] = useState<User[]>(initialUsers);
-  const [categories, setCategories] = useState<Category[]>(initialCategories);
-  const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
-  const [warehouses, setWarehouses] = useState<Warehouse[]>(initialWarehouses);
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [inventory, setInventory] = useState<Inventory[]>(initialInventory);
-  const [stockMovements, setStockMovements] = useState<StockMovement[]>(initialMovements);
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>(initialPOs);
+                setCategories(await catRes.json());
+                setSuppliers(await supRes.json());
+                setWarehouses(await whRes.json());
+                setInventory(await invRes.json());
+                setProducts(await prodRes.json());
+                setPurchaseOrders(await poRes.json());
+                setUsers(await usrRes.json());
+                setStockMovements(await movRes.json());
+            } catch (error) {
+                console.error("Failed to connect to API.", error);
+            }
+        };
+        fetchAllData();
+    }, []);
 
-  const value: DataContextType = {
-    currentUserID, users, categories, suppliers, warehouses, products, inventory, stockMovements, purchaseOrders,
+    const addCategory = async (c: Omit<Category, "categoryId">) => {
+        await fetch(`${API_URL}/Categories`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c) });
+        setCategories(await (await fetch(`${API_URL}/Categories`)).json());
+    };
+    const updateCategory = async (c: Category) => {
+        await fetch(`${API_URL}/Categories/${c.categoryID}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c) });
+        setCategories(await (await fetch(`${API_URL}/Categories`)).json());
+    };
+    const deleteCategory = async (id: number) => {
+        await fetch(`${API_URL}/Categories/${id}`, { method: "DELETE" });
+        setCategories(await (await fetch(`${API_URL}/Categories`)).json());
+    };
 
-    addUser: (u) => setUsers((p) => [...p, { ...u, userID: nextId("USR", p.map((x) => x.userID)) }]),
-    updateUser: (u) => setUsers((p) => p.map((x) => (x.userID === u.userID ? u : x))),
-    deleteUser: (id) => setUsers((p) => p.filter((x) => x.userID !== id)),
+    const addSupplier = async (s: Omit<Supplier, "supplierId">) => {
+        await fetch(`${API_URL}/Suppliers`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(s) });
+        setSuppliers(await (await fetch(`${API_URL}/Suppliers`)).json());
+    };
+    const updateSupplier = async (s: Supplier) => {
+        await fetch(`${API_URL}/Suppliers/${s.supplierID}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(s) });
+        setSuppliers(await (await fetch(`${API_URL}/Suppliers`)).json());
+    };
+    const deleteSupplier = async (id: number) => {
+        await fetch(`${API_URL}/Suppliers/${id}`, { method: "DELETE" });
+        setSuppliers(await (await fetch(`${API_URL}/Suppliers`)).json());
+    };
 
-    addCategory: (c) => setCategories((p) => [...p, { ...c, categoryID: nextId("CAT", p.map((x) => x.categoryID)) }]),
-    updateCategory: (c) => setCategories((p) => p.map((x) => (x.categoryID === c.categoryID ? c : x))),
-    deleteCategory: (id) => setCategories((p) => p.filter((x) => x.categoryID !== id)),
+    const addWarehouse = async (w: Omit<Warehouse, "warehouseId">) => {
+        await fetch(`${API_URL}/Warehouses`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(w) });
+        setWarehouses(await (await fetch(`${API_URL}/Warehouses`)).json());
+    };
+    const updateWarehouse = async (w: Warehouse) => {
+        await fetch(`${API_URL}/Warehouses/${w.warehouseID}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(w) });
+        setWarehouses(await (await fetch(`${API_URL}/Warehouses`)).json());
+    };
+    const deleteWarehouse = async (id: number) => {
+        await fetch(`${API_URL}/Warehouses/${id}`, { method: "DELETE" });
+        setWarehouses(await (await fetch(`${API_URL}/Warehouses`)).json());
+    };
 
-    addSupplier: (s) => setSuppliers((p) => [...p, { ...s, supplierID: nextId("SUP", p.map((x) => x.supplierID)) }]),
-    updateSupplier: (s) => setSuppliers((p) => p.map((x) => (x.supplierID === s.supplierID ? s : x))),
-    deleteSupplier: (id) => setSuppliers((p) => p.filter((x) => x.supplierID !== id)),
+    const addProduct = async (p: any) => {
+        await fetch(`${API_URL}/Products`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) });
+        setProducts(await (await fetch(`${API_URL}/Products`)).json());
+    };
+    const updateProduct = async (p: any) => {
+        await fetch(`${API_URL}/Products/${p.productID}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) });
+        setProducts(await (await fetch(`${API_URL}/Products`)).json());
+    };
+    const deleteProduct = async (id: number) => {
+        await fetch(`${API_URL}/Products/${id}`, { method: "DELETE" });
+        setProducts(await (await fetch(`${API_URL}/Products`)).json());
+    };
 
-    addWarehouse: (w) => setWarehouses((p) => [...p, { ...w, warehouseID: nextId("WH", p.map((x) => x.warehouseID)) }]),
-    updateWarehouse: (w) => setWarehouses((p) => p.map((x) => (x.warehouseID === w.warehouseID ? w : x))),
-    deleteWarehouse: (id) => setWarehouses((p) => p.filter((x) => x.warehouseID !== id)),
+    const addStockMovement = async (m: any) => {
+        await fetch(`${API_URL}/StockMovements`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(m) });
+        setStockMovements(await (await fetch(`${API_URL}/StockMovements`)).json());
+        setInventory(await (await fetch(`${API_URL}/Inventory`)).json());
+    };
+    const deleteStockMovement = async (id: number) => {
+        await fetch(`${API_URL}/StockMovements/${id}`, { method: "DELETE" });
+        setStockMovements(await (await fetch(`${API_URL}/StockMovements`)).json());
+    };
 
-    addProduct: (p) => setProducts((prev) => [...prev, { ...p, productID: nextId("PRD", prev.map((x) => x.productID)) }]),
-    updateProduct: (p) => setProducts((prev) => prev.map((x) => (x.productID === p.productID ? p : x))),
-    deleteProduct: (id) => setProducts((p) => p.filter((x) => x.productID !== id)),
+    const addPurchaseOrder = async (po: any) => {
+        await fetch(`${API_URL}/PurchaseOrders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(po) });
+        setPurchaseOrders(await (await fetch(`${API_URL}/PurchaseOrders`)).json());
+    };
+    const updatePurchaseOrder = async (po: any) => {
+        await fetch(`${API_URL}/PurchaseOrders/${po.purchaseOrderID}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(po) });
+        setPurchaseOrders(await (await fetch(`${API_URL}/PurchaseOrders`)).json());
+    };
+    const deletePurchaseOrder = async (id: number) => {
+        await fetch(`${API_URL}/PurchaseOrders/${id}`, { method: "DELETE" });
+        setPurchaseOrders(await (await fetch(`${API_URL}/PurchaseOrders`)).json());
+    };
 
-    addInventory: (i) => setInventory((p) => [...p, { ...i, inventoryID: nextId("INV", p.map((x) => x.inventoryID)) }]),
-    updateInventory: (i) => setInventory((p) => p.map((x) => (x.inventoryID === i.inventoryID ? i : x))),
-    deleteInventory: (id) => setInventory((p) => p.filter((x) => x.inventoryID !== id)),
+    const addInventory = async (i: any) => {
+        await fetch(`${API_URL}/Inventory`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(i) });
+        setInventory(await (await fetch(`${API_URL}/Inventory`)).json());
+    };
 
-    addStockMovement: (m) => setStockMovements((p) => [...p, { ...m, stockMovementID: nextId("MOV", p.map((x) => x.stockMovementID)) }]),
-    updateStockMovement: (m) => setStockMovements((p) => p.map((x) => (x.stockMovementID === m.stockMovementID ? m : x))),
-    deleteStockMovement: (id) => setStockMovements((p) => p.filter((x) => x.stockMovementID !== id)),
+    const value: DataContextType = {
+        currentUserID, users, categories, suppliers, warehouses, products, inventory, stockMovements, purchaseOrders,
+        addCategory, updateCategory, deleteCategory,
+        addSupplier, updateSupplier, deleteSupplier,
+        addWarehouse, updateWarehouse, deleteWarehouse,
+        addProduct, updateProduct, deleteProduct,
+        addStockMovement, deleteStockMovement,
+        addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder,
+        addInventory
+    };
 
-    addPurchaseOrder: (po) => setPurchaseOrders((p) => [...p, { ...po, purchaseOrderID: nextPoId(p.map((x) => x.purchaseOrderID)) }]),
-    updatePurchaseOrder: (po) => setPurchaseOrders((p) => p.map((x) => (x.purchaseOrderID === po.purchaseOrderID ? po : x))),
-    deletePurchaseOrder: (id) => setPurchaseOrders((p) => p.filter((x) => x.purchaseOrderID !== id)),
-  };
-
-  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
+    return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
 
 export function useData() {
-  const ctx = useContext(DataContext);
-  if (!ctx) throw new Error("useData must be used within DataProvider");
-  return ctx;
+    const ctx = useContext(DataContext);
+    if (!ctx) throw new Error("useData must be used within DataProvider");
+    return ctx;
 }

@@ -12,9 +12,7 @@ import { StockMovements } from "./components/StockMovements";
 import { PurchaseOrders } from "./components/PurchaseOrders";
 import { Users } from "./components/Users";
 
-type Page =
-  | "dashboard" | "products" | "categories" | "suppliers"
-  | "warehouses" | "inventory" | "stock-movements" | "purchase-orders" | "users";
+type Page = "dashboard" | "products" | "categories" | "suppliers" | "warehouses" | "inventory" | "stock-movements" | "purchase-orders" | "users";
 
 const pageTitles: Record<Page, string> = {
   dashboard: "Dashboard", products: "Products", categories: "Categories",
@@ -29,7 +27,6 @@ function AppInner({ onLogout }: { onLogout: () => void }) {
   const role = currentUser?.userRole ?? "Staff";
 
   const canViewUsers = role === "Admin";
-  // All roles can add; only Admin and Manager can edit/delete
   const canAdd = true;
   const canModify = role === "Admin" || role === "Manager";
 
@@ -55,23 +52,11 @@ function AppInner({ onLogout }: { onLogout: () => void }) {
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ background: "var(--background)", fontFamily: "var(--font-sans)" }}>
-      {/* MARKER-MAKE-KIT-INVOKED */}
-      <Sidebar
-        activePage={activePage}
-        onNavigate={handleNavigate}
-        userRole={role}
-        userName={currentUser?.fullName ?? ""}
-        onLogout={onLogout}
-      />
+      <Sidebar activePage={activePage} onNavigate={handleNavigate} userRole={role} userName={currentUser?.fullName ?? ""} onLogout={onLogout} />
       <main className="flex-1 overflow-y-auto">
-        <div
-          className="sticky top-0 z-10 flex items-center justify-between px-6 py-3"
-          style={{ background: "var(--card)", borderBottom: "1px solid var(--border)" }}
-        >
+        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-3" style={{ background: "var(--card)", borderBottom: "1px solid var(--border)" }}>
           <div className="flex items-center gap-2" style={{ fontSize: 12, color: "var(--muted-foreground)" }}>
-            <span>Electronics Corp</span>
-            <span>/</span>
-            <span style={{ color: "var(--foreground)", fontWeight: 500 }}>{pageTitles[activePage]}</span>
+            <span>Electronics Corp</span><span>/</span><span style={{ color: "var(--foreground)", fontWeight: 500 }}>{pageTitles[activePage]}</span>
           </div>
           <div className="flex items-center gap-3">
             <div className="rounded-lg px-3 py-1.5" style={{ background: "#10b98118", color: "#10b981", fontSize: 11, fontWeight: 600 }}>● System Online</div>
@@ -96,7 +81,7 @@ function AppInner({ onLogout }: { onLogout: () => void }) {
 }
 
 export default function App() {
-  const [currentUserID, setCurrentUserID] = useState<string | null>(null);
+  const [currentUserID, setCurrentUserID] = useState<number | null>(null);
 
   if (!currentUserID) {
     return <SignIn onLogin={(userID) => setCurrentUserID(userID)} />;
