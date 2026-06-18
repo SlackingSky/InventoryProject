@@ -365,3 +365,4 @@ FodyWeavers.xsd
 # React Frontend Ignore
 node_modules/
 dist/
+/InventoryBackend/InventoryBackend/appsettings.json
