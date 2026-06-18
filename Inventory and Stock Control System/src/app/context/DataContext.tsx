@@ -4,8 +4,7 @@ import type {
     Inventory, StockMovement, PurchaseOrder,
 } from "../data/mockData";
 
-//const API_URL = "https://localhost:7131/api";
-const API_URL = "https://demanding-envy-isolation.ngrok-free.dev/api";
+const API_URL = import.meta.env.VITE_API_URL;
 
 interface DataContextType {
     currentUserID: number;
