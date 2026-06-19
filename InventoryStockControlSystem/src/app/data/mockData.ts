@@ -1,5 +1,5 @@
 export type UserRole = "Admin" | "Manager" | "Staff";
-export type DeliveryStatus = "Pending" | "In Transit" | "Delivered" | "Cancelled";
+export type DeliveryStatus = "Draft" | "Pending" | "In Transit" | "Delivered" | "Cancelled";
 export type MovementType = "Stock In" | "Stock Out" | "Transfer" | "Adjustment" | "Return";
 
 export interface User { userID: number; username: string; fullName: string; userRole: UserRole; }

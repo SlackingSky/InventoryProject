@@ -57,7 +57,7 @@ export function Dashboard() {
     <div className="space-y-6">
       <div>
         <h1 style={{ color: "var(--foreground)", marginBottom: 4 }}>Dashboard</h1>
-        <p style={{ color: "var(--muted-foreground)", fontSize: 13 }}>Overview of your electronics inventory system — June 17, 2026</p>
+              <p style={{ color: "var(--muted-foreground)", fontSize: 13 }}>Overview of your electronics inventory system — {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
       </div>
 
       {/* Stats */}

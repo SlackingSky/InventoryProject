@@ -2,28 +2,21 @@ import { useState, Fragment } from "react";
 import { Badge, MonoValue } from "./DataTable";
 import { Modal, Field, Input, Select, FormGrid } from "./Modal";
 import { useData } from "../context/DataContext";
-import type { PurchaseOrder, DeliveryStatus } from "../data/mockData";
+import type { DeliveryStatus } from "../data/mockData";
 import { Plus, Pencil, Trash2, Package, ChevronRight, ChevronDown } from "lucide-react";
 
-type POForm = {
-  supplierID: number;
-  purchaseDate: string;
-  deliveryStatus: DeliveryStatus;
-  details: { productId: number; purchaseQuantity: number; unitCost: number; }[];
-};
+type POForm = { supplierID: number; purchaseDate: string; deliveryStatus: DeliveryStatus; details: { productId: number; purchaseQuantity: number; unitCost: number; }[]; };
+const blank = (): POForm => ({ supplierID: 0, purchaseDate: new Date().toISOString().split("T")[0], deliveryStatus: "Pending", details: [], });
+const statusColors: Record<DeliveryStatus, string> = { Pending: "#f59e0b", "In Transit": "#3b82f6", Delivered: "#10b981", Cancelled: "#ef4444" };
 
-const blank = (): POForm => ({
-  supplierID: 0,
-  purchaseDate: new Date().toISOString().split("T")[0],
-  deliveryStatus: "Pending",
-  details: [],
-});
-
-const statusColors: Record<DeliveryStatus, string> = {
-  Pending: "#f59e0b",
-  "In Transit": "#3b82f6",
-  Delivered: "#10b981",
-  Cancelled: "#ef4444",
+const getUnit = (productName: string, products: any[]) => {
+  const product = products.find((p: any) => (p.productName || p.ProductName) === productName);
+  if (!product) return "pcs";
+  const cat = (product.categoryName || product.CategoryName || "").toLowerCase();
+  if (cat.includes("audio")) return "sets";
+  if (cat.includes("laptop") || cat.includes("network")) return "units";
+  if (cat.includes("peripheral")) return "boxes";
+  return "pcs"; 
 };
 
 export function PurchaseOrders({ canAdd = true, canModify = true, canEdit = true }: any) {
@@ -31,9 +24,8 @@ export function PurchaseOrders({ canAdd = true, canModify = true, canEdit = true
   
   const [modal, setModal] = useState<"create" | "edit" | null>(null);
   const [confirmAction, setConfirmAction] = useState<"add" | "edit" | "delete" | "receive" | null>(null);
-  
   const [form, setForm] = useState<POForm>(blank());
-  const [selected, setSelected] = useState<PurchaseOrder | null>(null);
+  const [selected, setSelected] = useState<any | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   
   const [receiveWarehouse, setReceiveWarehouse] = useState<number>(0);
@@ -50,36 +42,56 @@ export function PurchaseOrders({ canAdd = true, canModify = true, canEdit = true
 
   const openCreate = () => { setForm(blank()); setError(""); setModal("create"); };
 
-  const openEdit = (po: PurchaseOrder) => {
+  const openEdit = (po: any) => {
     setSelected(po);
     setForm({
-      supplierID: po.supplierID,
+      supplierID: po.supplierID ?? po.supplierId ?? po.SupplierID ?? 0,
       purchaseDate: po.purchaseDate,
       deliveryStatus: po.deliveryStatus,
-      details: po.details ? po.details.map((d) => ({
-        productId: d.productId,
-        purchaseQuantity: d.purchaseQuantity,
-        unitCost: d.unitCost,
+      details: po.details ? po.details.map((d: any) => ({
+        productId: d.productId ?? d.ProductID ?? 0,
+        purchaseQuantity: d.purchaseQuantity ?? d.PurchaseQuantity ?? 0,
+        unitCost: d.unitCost ?? d.UnitCost ?? 0,
       })) : [],
     });
     setError("");
     setModal("edit");
   };
 
+  const availableProducts = products.filter((p: any) => {
+    const pSuppId = p.supplierID ?? p.supplierId ?? p.SupplierID ?? 0;
+    return pSuppId === form.supplierID;
+  });
+
   const addItem = () => {
+    if (!form.supplierID || form.supplierID === 0) {
+      setError("Please select a supplier first to view their products.");
+      return;
+    }
+    if (availableProducts.length === 0) {
+      setError("This supplier has no registered products in the catalog.");
+      return;
+    }
+    
+    const firstProd = availableProducts[0];
+    const pId = firstProd.productID ?? firstProd.productId ?? firstProd.ProductID ?? 0;
+    const pPrice = firstProd.price ?? firstProd.Price ?? 0;
+
     setForm(p => ({
       ...p,
-      details: [...p.details, { productId: products[0]?.productID || 0, purchaseQuantity: 1, unitCost: products[0]?.price || 0 }]
+      details: [...p.details, { productId: pId, purchaseQuantity: 1, unitCost: pPrice }]
     }));
+    setError("");
   };
 
   const updateItem = (index: number, field: string, value: number) => {
     setForm(p => {
       const newDetails = [...p.details];
       newDetails[index] = { ...newDetails[index], [field]: value };
+      
       if (field === "productId") {
-        const prod = products.find((pr) => pr.productID === value);
-        if (prod) newDetails[index].unitCost = prod.price;
+        const prod = availableProducts.find((pr: any) => (pr.productID ?? pr.productId ?? pr.ProductID) === value);
+        if (prod) newDetails[index].unitCost = prod.price ?? prod.Price ?? 0;
       }
       return { ...p, details: newDetails };
     });
@@ -90,7 +102,7 @@ export function PurchaseOrders({ canAdd = true, canModify = true, canEdit = true
   };
 
   const handlePreSave = () => {
-    if (!form.supplierID) return setError("Please select a supplier.");
+    if (!form.supplierID || form.supplierID === 0) return setError("Please select a supplier.");
     if (!form.purchaseDate) return setError("Please enter a purchase date.");
     if (form.details.length === 0) return setError("You must add at least one line item.");
 
@@ -102,50 +114,63 @@ export function PurchaseOrders({ canAdd = true, canModify = true, canEdit = true
 
   const executeAction = async () => {
     setError("");
+    try {
+      const payload = {
+        ...form,
+        details: form.details.map(d => ({ ProductID: d.productId, PurchaseQuantity: d.purchaseQuantity, UnitCost: d.unitCost }))
+      };
 
-    if (confirmAction === "add") {
-      addPurchaseOrder({ ...form, createdBy: currentUserID });
-    } 
-    else if (confirmAction === "edit" && selected) {
-      updatePurchaseOrder({ ...selected, ...form });
-    } 
-    else if (confirmAction === "delete" && selected) {
-      deletePurchaseOrder(selected.purchaseOrderID);
-    } 
-    else if (confirmAction === "receive" && selected) {
-      if (!receiveWarehouse) {
-        setError("You must select a destination warehouse to auto-receive inventory.");
-        return; 
-      }
+      if (confirmAction === "add") {
+        await addPurchaseOrder({ ...payload, createdBy: currentUserID });
+      } 
+      else if (confirmAction === "edit" && selected) {
+        const poId = selected.purchaseOrderID ?? selected.purchaseOrderId ?? selected.PurchaseOrderID ?? 0;
+        await updatePurchaseOrder({ ...selected, ...payload, purchaseOrderID: poId });
+      } 
+      else if (confirmAction === "delete" && selected) {
+        const poId = selected.purchaseOrderID ?? selected.purchaseOrderId ?? selected.PurchaseOrderID ?? 0;
+        await deletePurchaseOrder(poId);
+      } 
+      else if (confirmAction === "receive" && selected) {
+        if (!receiveWarehouse) {
+          setError("You must select a destination warehouse to auto-receive inventory.");
+          return;
+        }
 
-      try {
+        const poId = selected.purchaseOrderID ?? selected.purchaseOrderId ?? selected.PurchaseOrderID ?? 0;
         await updatePurchaseOrder({
           ...selected,
+          purchaseOrderID: poId,
           deliveryStatus: "Delivered",
           receivedDate: new Date().toISOString().split("T")[0],
-          receivedBy: currentUserID
+          receivedBy: currentUserID,
+          details: selected.details.map((d: any) => ({
+             ProductID: d.productId ?? d.ProductID ?? 0,
+             PurchaseQuantity: d.purchaseQuantity ?? d.PurchaseQuantity ?? 0,
+             UnitCost: d.unitCost ?? d.UnitCost ?? 0
+          }))
         });
 
-        const movements = selected.details.map((item) => 
-          addStockMovement({
+        for (const item of selected.details) {
+          const itemProdId = item.productId ?? item.ProductID ?? 0;
+          const itemQty = item.purchaseQuantity ?? item.PurchaseQuantity ?? 0;
+          
+          await addStockMovement({
             warehouseID: receiveWarehouse,
-            productID: item.productId,
+            productID: itemProdId,
             movementType: "Stock In",
-            movementQuantity: item.purchaseQuantity,
-            movementReference: `PO-${selected.purchaseOrderID}`,
+            movementQuantity: itemQty,
+            movementReference: `PO-${poId}`,
             processedBy: currentUserID
-          })
-        );
-        
-        await Promise.all(movements);
-      } catch (err) {
-        setError("Failed to update Purchase Order. Stock movements were aborted.");
-        return;
+          });
+        }
       }
-    }
 
-    setConfirmAction(null);
-    setModal(null);
+      setConfirmAction(null);
+      setModal(null);
+    } catch (err) {
+      setError("Database operation failed. Ensure all fields are valid.");
+    }
   };
 
   const cols = [
@@ -189,23 +214,20 @@ export function PurchaseOrders({ canAdd = true, canModify = true, canEdit = true
               </tr>
             </thead>
             <tbody>
-              {purchaseOrders.map((po) => {
-                const isExpanded = expanded.has(po.purchaseOrderID);
-                const totalAmount = po.details ? po.details.reduce((s, d) => s + (d.purchaseQuantity * d.unitCost), 0) : 0;
+              {purchaseOrders.map((po: any) => {
+                const poId = po.purchaseOrderID ?? po.purchaseOrderId ?? po.PurchaseOrderID ?? 0;
+                const isExpanded = expanded.has(poId);
+                const totalAmount = po.details ? po.details.reduce((s: number, d: any) => s + ((d.purchaseQuantity ?? d.PurchaseQuantity ?? 0) * (d.unitCost ?? d.UnitCost ?? 0)), 0) : 0;
 
                 return (
-                  <Fragment key={po.purchaseOrderID}>
+                  <Fragment key={poId}>
                     <tr className={`border-b border-[var(--border)] transition-colors hover:bg-[var(--muted)] ${isExpanded ? "bg-[var(--muted)]" : ""}`}>
-                      <td className="px-4 py-3 text-center">
-                        <button onClick={() => toggleExpand(po.purchaseOrderID)} className="p-1 rounded text-[var(--muted-foreground)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-center"><MonoValue value={po.purchaseOrderID} /></td>
+                      <td className="px-4 py-3 text-center"><button onClick={() => toggleExpand(poId)} className="p-1 rounded text-[var(--muted-foreground)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors">{isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></td>
+                      <td className="px-4 py-3 text-center"><MonoValue value={poId} /></td>
                       <td className="px-4 py-3 text-left font-medium text-[var(--foreground)]">{po.supplierName}</td>
                       <td className="px-4 py-3 text-center text-[var(--muted-foreground)] text-xs">{new Date(po.purchaseDate).toLocaleDateString()}</td>
                       <td className="px-4 py-3 text-center text-[var(--muted-foreground)] text-xs">{po.receivedDate ? new Date(po.receivedDate).toLocaleDateString() : "-"}</td>
-                      <td className="px-4 py-3 text-center"><Badge label={po.deliveryStatus} color={statusColors[po.deliveryStatus]} /></td>
+                      <td className="px-4 py-3 text-center"><Badge label={po.deliveryStatus} color={statusColors[po.deliveryStatus as DeliveryStatus] || "#6b7280"} /></td>
                       <td className="px-4 py-3 text-right"><MonoValue value={`Php ${totalAmount.toLocaleString()}`} /></td>
                       <td className="px-4 py-3 text-center"><MonoValue value={po.details?.length || 0} /></td>
                       <td className="px-4 py-3 text-left text-xs text-[var(--muted-foreground)]">{po.createdByName}</td>
@@ -214,7 +236,7 @@ export function PurchaseOrders({ canAdd = true, canModify = true, canEdit = true
                           {canModify && po.deliveryStatus !== "Delivered" && po.deliveryStatus !== "Cancelled" && (
                             <button onClick={() => { 
                               setSelected(po); 
-                              setReceiveWarehouse(warehouses[0]?.warehouseID || 0);
+                              setReceiveWarehouse((warehouses[0] as any)?.warehouseID ?? (warehouses[0] as any)?.warehouseId ?? 0);
                               setError(""); 
                               setConfirmAction("receive"); 
                             }} title="Mark as Delivered" className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-50 transition-colors"><Package size={16} /></button>
@@ -244,13 +266,17 @@ export function PurchaseOrders({ canAdd = true, canModify = true, canEdit = true
                               </thead>
                               <tbody>
                                 {po.details?.map((item: any, i: number) => {
-                                  const p = products.find(prod => prod.productID === item.productId);
+                                  const itemProdId = item.productId ?? item.ProductID ?? 0;
+                                  const itemQty = item.purchaseQuantity ?? item.PurchaseQuantity ?? 0;
+                                  const itemUnit = item.unitCost ?? item.UnitCost ?? 0;
+                                  const p = products.find((prod: any) => (prod.productID ?? prod.productId ?? prod.ProductID) === itemProdId);
+                                  const productName = p?.productName || "Unknown";
                                   return (
                                     <tr key={i} className={i !== po.details.length - 1 ? "border-b border-[var(--border)]" : ""}>
-                                      <td className="py-2 text-[var(--foreground)] font-medium text-sm">{p?.productName || "Unknown"}</td>
-                                      <td className="py-2 text-center text-sm"><MonoValue value={item.purchaseQuantity} /></td>
-                                      <td className="py-2 text-right text-sm"><MonoValue value={`Php ${item.unitCost.toLocaleString()}`} /></td>
-                                      <td className="py-2 pr-4 text-right text-sm font-medium"><MonoValue value={`Php ${(item.purchaseQuantity * item.unitCost).toLocaleString()}`} /></td>
+                                      <td className="py-2 text-[var(--foreground)] font-medium text-sm">{productName}</td>
+                                      <td className="py-2 text-center text-sm"><MonoValue value={`${itemQty} ${getUnit(productName, products)}`} /></td>
+                                      <td className="py-2 text-right text-sm"><MonoValue value={`Php ${itemUnit.toLocaleString()}`} /></td>
+                                      <td className="py-2 pr-4 text-right text-sm font-medium"><MonoValue value={`Php ${(itemQty * itemUnit).toLocaleString()}`} /></td>
                                     </tr>
                                   );
                                 })}
@@ -268,79 +294,106 @@ export function PurchaseOrders({ canAdd = true, canModify = true, canEdit = true
         </div>
       </div>
 
-      {/* Form Modal */}
       <Modal title={modal === "create" ? "New Purchase Order" : "Edit Purchase Order"} open={modal === "create" || modal === "edit"} onClose={() => setModal(null)} onSubmit={handlePreSave} submitLabel={modal === "create" ? "Create Order" : "Save Changes"} size="xl">
+        
+        {error && <div className="mb-4 px-4 py-3 rounded-lg border bg-red-50 border-red-200 text-red-600 text-sm font-medium sticky top-0 z-10 shadow-sm">{error}</div>}
+        
         <div className="grid grid-cols-2 gap-4 mb-6 pb-6 border-b border-[var(--border)]">
           <Field label="Supplier" required>
-            <Select value={form.supplierID.toString()} onChange={(e) => setForm(p => ({ ...p, supplierID: parseInt(e.target.value) || 0 }))}>
+            <Select 
+              value={(form.supplierID || 0).toString()} 
+              onChange={(e) => {
+                const newId = parseInt(e.target.value) || 0;
+                setForm(p => ({ ...p, supplierID: newId, details: [] }));
+                setError("");
+              }}
+              disabled={!!selected}
+            >
               <option value="0">Select supplier...</option>
-              {suppliers.map(s => <option key={s.supplierID} value={s.supplierID}>{s.supplierName}</option>)}
+              {suppliers.map((s: any) => {
+                const sId = s.supplierID ?? s.supplierId ?? s.SupplierID ?? 0;
+                return <option key={sId} value={sId}>{s.supplierName || s.SupplierName}</option>
+              })}
             </Select>
           </Field>
+          
           <Field label="Order Date" required>
-            <Input type="date" value={form.purchaseDate} onChange={(e) => setForm(p => ({ ...p, purchaseDate: e.target.value }))} />
+            <Input 
+              type="date" 
+              value={form.purchaseDate} 
+              onChange={(e) => setForm(p => ({ ...p, purchaseDate: e.target.value }))}
+              readOnly
+              className="bg-black/5 dark:bg-white/5 cursor-not-allowed opacity-70"
+              title="Order date is auto-generated."
+            />
           </Field>
         </div>
 
         <div className="mb-2 flex items-center justify-between">
           <label className="text-sm font-semibold text-[var(--foreground)]">Line Items</label>
-          <button type="button" onClick={addItem} className="text-xs font-medium px-2 py-1 rounded bg-[var(--muted)] text-[var(--foreground)] hover:brightness-95 transition-colors">+ Add Item</button>
+          <button type="button" onClick={addItem} className="text-xs font-medium px-2 py-1 rounded bg-[var(--muted)] text-[var(--foreground)] hover:brightness-95 transition-colors">
+            + Add Item
+          </button>
         </div>
 
         <div className="space-y-2">
           {form.details.map((item, index) => (
             <div key={index} className="flex gap-2 items-start p-3 rounded-lg bg-[var(--muted)] border border-[var(--border)]">
               <div className="flex-1">
-                <Select value={item.productId.toString()} onChange={(e) => updateItem(index, "productId", parseInt(e.target.value) || 0)}>
+                <Select value={(item.productId || 0).toString()} onChange={(e) => updateItem(index, "productId", parseInt(e.target.value) || 0)}>
                   <option value="0">Select product...</option>
-                  {products.map(p => <option key={p.productID} value={p.productID}>{p.productName}</option>)}
+                  {availableProducts.map((p: any) => {
+                    const pId = p.productID ?? p.productId ?? p.ProductID ?? 0;
+                    return <option key={pId} value={pId}>{p.productName || p.ProductName}</option>
+                  })}
                 </Select>
               </div>
               <div className="w-24">
                 <Input type="number" min={1} placeholder="Qty" value={item.purchaseQuantity} onChange={(e) => updateItem(index, "purchaseQuantity", parseInt(e.target.value) || 0)} />
               </div>
               <div className="w-32">
-                <Input type="number" min={0} step="0.01" placeholder="Unit Cost" value={item.unitCost} onChange={(e) => updateItem(index, "unitCost", parseFloat(e.target.value) || 0)} />
+                <Input 
+                  type="number" 
+                  min={0} 
+                  step="0.01" 
+                  placeholder="Unit Cost" 
+                  value={item.unitCost} 
+                  readOnly
+                  title="Unit cost is automatically synced with the product's catalog price."
+                  style={{ backgroundColor: "var(--background)", opacity: 0.7, cursor: "not-allowed" }}
+                />
               </div>
               <div className="w-32 py-2 text-right text-sm font-medium text-[var(--foreground)]">
-                Php {(item.purchaseQuantity * item.unitCost).toLocaleString()}
+                Php {((item.purchaseQuantity || 0) * (item.unitCost || 0)).toLocaleString()}
               </div>
               <button type="button" onClick={() => removeItem(index)} className="p-2 text-red-500 hover:bg-red-500/10 rounded-md transition-colors"><Trash2 size={16} /></button>
             </div>
           ))}
           {form.details.length === 0 && (
-            <div className="p-8 text-center rounded-lg border border-dashed border-[var(--border)] text-[var(--muted-foreground)] text-sm">No items added to this order yet.</div>
+            <div className="p-8 text-center rounded-lg border border-dashed border-[var(--border)] text-[var(--muted-foreground)] text-sm">
+              {form.supplierID === 0 ? "Select a supplier above to start adding items." : "No items added to this order yet."}
+            </div>
           )}
         </div>
       </Modal>
 
-      {/* Universal Confirmation Modal */}
       <Modal title={confirmAction === "receive" ? "Receive Order" : "Confirm Action"} open={!!confirmAction} onClose={() => setConfirmAction(null)} onSubmit={executeAction} submitLabel="Yes, Proceed" size="sm">
         {error && <div className="mb-4 px-3 py-2 rounded bg-red-50 text-red-600 text-sm border border-red-100">{error}</div>}
-        
         <div className="p-2 text-sm text-[var(--foreground)]">
           {confirmAction === "receive" ? (
-            <>
-              <p className="mb-4">You are about to mark this order as <strong>Delivered</strong>.</p>
+            <><p className="mb-4">You are about to mark this order as <strong>Delivered</strong>.</p>
               <Field label="Destination Warehouse" required>
-                <Select value={receiveWarehouse.toString()} onChange={(e) => setReceiveWarehouse(parseInt(e.target.value) || 0)}>
+                <Select value={(receiveWarehouse || 0).toString()} onChange={(e) => setReceiveWarehouse(parseInt(e.target.value) || 0)}>
                   <option value="0">Select warehouse...</option>
-                  {warehouses.map(w => <option key={w.warehouseID} value={w.warehouseID}>{w.warehouseName}</option>)}
+                  {warehouses.map((w: any) => {
+                    const wId = w.warehouseID ?? w.warehouseId ?? w.WarehouseID ?? 0;
+                    return <option key={wId} value={wId}>{w.warehouseName || w.WarehouseName}</option>;
+                  })}
                 </Select>
               </Field>
-              <div className="mt-4 text-xs text-emerald-600 font-medium bg-emerald-50 p-2 rounded">
-                Automation: This will instantly update the status and inject all line items into your live inventory.
-              </div>
             </>
           ) : (
-            <>
-              Are you sure you want to <strong>{
-                confirmAction === "add" ? "create this new purchase order" :
-                confirmAction === "edit" ? "save changes to this purchase order" :
-                "delete this purchase order"
-              }</strong>?
-              {confirmAction === "delete" && <div className="mt-2 text-xs text-red-500 font-medium">Warning: This action cannot be undone and will delete all associated line items.</div>}
-            </>
+            <>Are you sure you want to <strong>{confirmAction === "add" ? "create this new purchase order" : confirmAction === "edit" ? "save changes to this purchase order" : "delete this purchase order"}</strong>?</>
           )}
         </div>
       </Modal>

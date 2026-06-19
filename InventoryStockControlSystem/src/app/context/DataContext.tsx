@@ -1,51 +1,28 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import type {
-    User, Category, Supplier, Warehouse, Product,
-    Inventory, StockMovement, PurchaseOrder,
-} from "../data/mockData";
+import type { User, Category, Supplier, Warehouse, Product, Inventory, StockMovement, PurchaseOrder } from "../data/mockData";
 
-const API_URL = import.meta.env.VITE_API_URL;
+//const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = "https://localhost:7131/api";
 
 interface DataContextType {
+    isLoading: boolean;
     currentUserID: number;
-    users: User[];
-    categories: Category[];
-    suppliers: Supplier[];
-    warehouses: Warehouse[];
-    products: Product[];
-    inventory: Inventory[];
-    stockMovements: StockMovement[];
-    purchaseOrders: PurchaseOrder[];
+    users: User[]; categories: Category[]; suppliers: Supplier[]; warehouses: Warehouse[];
+    products: Product[]; inventory: Inventory[]; stockMovements: StockMovement[]; purchaseOrders: PurchaseOrder[];
 
-    addCategory: (c: Omit<Category, "categoryId">) => void;
-    updateCategory: (c: Category) => void;
-    deleteCategory: (id: number) => void;
-
-    addSupplier: (s: Omit<Supplier, "supplierId">) => void;
-    updateSupplier: (s: Supplier) => void;
-    deleteSupplier: (id: number) => void;
-
-    addWarehouse: (w: Omit<Warehouse, "warehouseId">) => void;
-    updateWarehouse: (w: Warehouse) => void;
-    deleteWarehouse: (id: number) => void;
-
-    addProduct: (p: any) => void;
-    updateProduct: (p: any) => void;
-    deleteProduct: (id: number) => void;
-
-    addStockMovement: (m: any) => void;
-    deleteStockMovement: (id: number) => void;
-
-    addPurchaseOrder: (po: any) => void;
-    updatePurchaseOrder: (po: any) => void;
-    deletePurchaseOrder: (id: number) => void;
-
-    addInventory: (i: any) => void;
+    addCategory: (c: any) => Promise<void>; updateCategory: (c: any) => Promise<void>; deleteCategory: (id: number) => Promise<void>;
+    addSupplier: (s: any) => Promise<void>; updateSupplier: (s: any) => Promise<void>; deleteSupplier: (id: number) => Promise<void>;
+    addWarehouse: (w: any) => Promise<void>; updateWarehouse: (w: any) => Promise<void>; deleteWarehouse: (id: number) => Promise<void>;
+    addProduct: (p: any) => Promise<void>; updateProduct: (p: any) => Promise<void>; deleteProduct: (id: number) => Promise<void>;
+    addStockMovement: (m: any) => Promise<void>; deleteStockMovement: (id: number) => Promise<void>;
+    addPurchaseOrder: (po: any) => Promise<void>; updatePurchaseOrder: (po: any) => Promise<void>; deletePurchaseOrder: (id: number) => Promise<void>;
+    addInventory: (i: any) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
 
 export function DataProvider({ children, currentUserID }: { children: React.ReactNode; currentUserID: number }) {
+    const [isLoading, setIsLoading] = useState(true);
     const [users, setUsers] = useState<User[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -57,122 +34,78 @@ export function DataProvider({ children, currentUserID }: { children: React.Reac
 
     useEffect(() => {
         const fetchAllData = async () => {
+            setIsLoading(true);
             try {
                 const [catRes, supRes, whRes, invRes, prodRes, poRes, usrRes, movRes] = await Promise.all([
-                    fetch(`${API_URL}/Categories`),
-                    fetch(`${API_URL}/Suppliers`),
-                    fetch(`${API_URL}/Warehouses`),
-                    fetch(`${API_URL}/Inventory`),
-                    fetch(`${API_URL}/Products`),
-                    fetch(`${API_URL}/PurchaseOrders`),
-                    fetch(`${API_URL}/Users`),
-                    fetch(`${API_URL}/StockMovements`)
+                    fetch(`${API_URL}/Categories`), fetch(`${API_URL}/Suppliers`), fetch(`${API_URL}/Warehouses`), fetch(`${API_URL}/Inventory`),
+                    fetch(`${API_URL}/Products`), fetch(`${API_URL}/PurchaseOrders`), fetch(`${API_URL}/Users`), fetch(`${API_URL}/StockMovements`)
                 ]);
-
-                setCategories(await catRes.json());
-                setSuppliers(await supRes.json());
-                setWarehouses(await whRes.json());
-                setInventory(await invRes.json());
-                setProducts(await prodRes.json());
-                setPurchaseOrders(await poRes.json());
-                setUsers(await usrRes.json());
-                setStockMovements(await movRes.json());
-            } catch (error) {
-                console.error("Failed to connect to API.", error);
-            }
+                setCategories(await catRes.json()); setSuppliers(await supRes.json()); setWarehouses(await whRes.json());
+                setInventory(await invRes.json()); setProducts(await prodRes.json()); setPurchaseOrders(await poRes.json());
+                setUsers(await usrRes.json()); setStockMovements(await movRes.json());
+            } catch (error) { console.error("API Connection Failed", error); } 
+            finally { setIsLoading(false); }
         };
         fetchAllData();
     }, []);
 
-    const addCategory = async (c: Omit<Category, "categoryId">) => {
-        await fetch(`${API_URL}/Categories`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c) });
-        setCategories(await (await fetch(`${API_URL}/Categories`)).json());
-    };
-    const updateCategory = async (c: Category) => {
-        await fetch(`${API_URL}/Categories/${c.categoryID}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c) });
-        setCategories(await (await fetch(`${API_URL}/Categories`)).json());
-    };
-    const deleteCategory = async (id: number) => {
-        await fetch(`${API_URL}/Categories/${id}`, { method: "DELETE" });
-        setCategories(await (await fetch(`${API_URL}/Categories`)).json());
-    };
-
-    const addSupplier = async (s: Omit<Supplier, "supplierId">) => {
-        await fetch(`${API_URL}/Suppliers`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(s) });
-        setSuppliers(await (await fetch(`${API_URL}/Suppliers`)).json());
-    };
-    const updateSupplier = async (s: Supplier) => {
-        await fetch(`${API_URL}/Suppliers/${s.supplierID}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(s) });
-        setSuppliers(await (await fetch(`${API_URL}/Suppliers`)).json());
-    };
-    const deleteSupplier = async (id: number) => {
-        await fetch(`${API_URL}/Suppliers/${id}`, { method: "DELETE" });
-        setSuppliers(await (await fetch(`${API_URL}/Suppliers`)).json());
+    const executeAndRefresh = async (url: string, method: string, body?: any) => {
+        const res = await fetch(url, {
+            method,
+            headers: body ? { "Content-Type": "application/json" } : undefined,
+            body: body ? JSON.stringify(body) : undefined
+        });
+        if (!res.ok) {
+            let errMsg = "Database transaction failed";
+            try {
+                const errData = await res.json();
+                if (errData && errData.message) errMsg = errData.message;
+            } catch (e) {}
+            alert("⚠️ SYSTEM ERROR:\n" + errMsg);
+            throw new Error(errMsg);
+        }
     };
 
-    const addWarehouse = async (w: Omit<Warehouse, "warehouseId">) => {
-        await fetch(`${API_URL}/Warehouses`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(w) });
-        setWarehouses(await (await fetch(`${API_URL}/Warehouses`)).json());
-    };
-    const updateWarehouse = async (w: Warehouse) => {
-        await fetch(`${API_URL}/Warehouses/${w.warehouseID}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(w) });
-        setWarehouses(await (await fetch(`${API_URL}/Warehouses`)).json());
-    };
-    const deleteWarehouse = async (id: number) => {
-        await fetch(`${API_URL}/Warehouses/${id}`, { method: "DELETE" });
-        setWarehouses(await (await fetch(`${API_URL}/Warehouses`)).json());
-    };
+    const addCategory = async (c: any) => { await executeAndRefresh(`${API_URL}/Categories`, "POST", c); setCategories(await (await fetch(`${API_URL}/Categories`)).json()); };
+    const updateCategory = async (c: any) => { await executeAndRefresh(`${API_URL}/Categories/${c.categoryID || c.categoryId}`, "PUT", c); setCategories(await (await fetch(`${API_URL}/Categories`)).json()); };
+    const deleteCategory = async (id: number) => { await executeAndRefresh(`${API_URL}/Categories/${id}`, "DELETE"); setCategories(await (await fetch(`${API_URL}/Categories`)).json()); };
 
-    const addProduct = async (p: any) => {
-        await fetch(`${API_URL}/Products`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) });
-        setProducts(await (await fetch(`${API_URL}/Products`)).json());
-    };
-    const updateProduct = async (p: any) => {
-        await fetch(`${API_URL}/Products/${p.productID}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) });
-        setProducts(await (await fetch(`${API_URL}/Products`)).json());
-    };
-    const deleteProduct = async (id: number) => {
-        await fetch(`${API_URL}/Products/${id}`, { method: "DELETE" });
-        setProducts(await (await fetch(`${API_URL}/Products`)).json());
-    };
+    const addSupplier = async (s: any) => { await executeAndRefresh(`${API_URL}/Suppliers`, "POST", s); setSuppliers(await (await fetch(`${API_URL}/Suppliers`)).json()); };
+    const updateSupplier = async (s: any) => { await executeAndRefresh(`${API_URL}/Suppliers/${s.supplierID || s.supplierId}`, "PUT", s); setSuppliers(await (await fetch(`${API_URL}/Suppliers`)).json()); };
+    const deleteSupplier = async (id: number) => { await executeAndRefresh(`${API_URL}/Suppliers/${id}`, "DELETE"); setSuppliers(await (await fetch(`${API_URL}/Suppliers`)).json()); };
 
-    const addStockMovement = async (m: any) => {
-        await fetch(`${API_URL}/StockMovements`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(m) });
-        setStockMovements(await (await fetch(`${API_URL}/StockMovements`)).json());
-        setInventory(await (await fetch(`${API_URL}/Inventory`)).json());
-    };
-    const deleteStockMovement = async (id: number) => {
-        await fetch(`${API_URL}/StockMovements/${id}`, { method: "DELETE" });
-        setStockMovements(await (await fetch(`${API_URL}/StockMovements`)).json());
-    };
+    const addWarehouse = async (w: any) => { await executeAndRefresh(`${API_URL}/Warehouses`, "POST", w); setWarehouses(await (await fetch(`${API_URL}/Warehouses`)).json()); };
+    const updateWarehouse = async (w: any) => { await executeAndRefresh(`${API_URL}/Warehouses/${w.warehouseID || w.warehouseId}`, "PUT", w); setWarehouses(await (await fetch(`${API_URL}/Warehouses`)).json()); };
+    const deleteWarehouse = async (id: number) => { await executeAndRefresh(`${API_URL}/Warehouses/${id}`, "DELETE"); setWarehouses(await (await fetch(`${API_URL}/Warehouses`)).json()); };
 
-    const addPurchaseOrder = async (po: any) => {
-        await fetch(`${API_URL}/PurchaseOrders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(po) });
-        setPurchaseOrders(await (await fetch(`${API_URL}/PurchaseOrders`)).json());
-    };
-    const updatePurchaseOrder = async (po: any) => {
-        await fetch(`${API_URL}/PurchaseOrders/${po.purchaseOrderID}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(po) });
-        setPurchaseOrders(await (await fetch(`${API_URL}/PurchaseOrders`)).json());
-    };
-    const deletePurchaseOrder = async (id: number) => {
-        await fetch(`${API_URL}/PurchaseOrders/${id}`, { method: "DELETE" });
-        setPurchaseOrders(await (await fetch(`${API_URL}/PurchaseOrders`)).json());
-    };
+    const addProduct = async (p: any) => { await executeAndRefresh(`${API_URL}/Products`, "POST", p); setProducts(await (await fetch(`${API_URL}/Products`)).json()); };
+    const updateProduct = async (p: any) => { await executeAndRefresh(`${API_URL}/Products/${p.productID || p.productId}`, "PUT", p); setProducts(await (await fetch(`${API_URL}/Products`)).json()); };
+    const deleteProduct = async (id: number) => { await executeAndRefresh(`${API_URL}/Products/${id}`, "DELETE"); setProducts(await (await fetch(`${API_URL}/Products`)).json()); };
 
-    const addInventory = async (i: any) => {
-        await fetch(`${API_URL}/Inventory`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(i) });
-        setInventory(await (await fetch(`${API_URL}/Inventory`)).json());
+    const addStockMovement = async (m: any) => { 
+        await executeAndRefresh(`${API_URL}/StockMovements`, "POST", m); 
+        setStockMovements(await (await fetch(`${API_URL}/StockMovements`)).json()); 
+        setInventory(await (await fetch(`${API_URL}/Inventory`)).json()); 
+        
+        // FIX: Triggers a silent Network Request so React immediately sees any Draft POs!
+        setPurchaseOrders(await (await fetch(`${API_URL}/PurchaseOrders`)).json()); 
+    };
+    
+    const deleteStockMovement = async (id: number) => { await executeAndRefresh(`${API_URL}/StockMovements/${id}`, "DELETE"); setStockMovements(await (await fetch(`${API_URL}/StockMovements`)).json()); };
+
+    const addPurchaseOrder = async (po: any) => { await executeAndRefresh(`${API_URL}/PurchaseOrders`, "POST", po); setPurchaseOrders(await (await fetch(`${API_URL}/PurchaseOrders`)).json()); };
+    const updatePurchaseOrder = async (po: any) => { await executeAndRefresh(`${API_URL}/PurchaseOrders/${po.purchaseOrderID || po.purchaseOrderId}`, "PUT", po); setPurchaseOrders(await (await fetch(`${API_URL}/PurchaseOrders`)).json()); };
+    const deletePurchaseOrder = async (id: number) => { await executeAndRefresh(`${API_URL}/PurchaseOrders/${id}`, "DELETE"); setPurchaseOrders(await (await fetch(`${API_URL}/PurchaseOrders`)).json()); };
+
+    const addInventory = async (i: any) => { 
+        await executeAndRefresh(`${API_URL}/Inventory`, "POST", i); 
+        setInventory(await (await fetch(`${API_URL}/Inventory`)).json()); 
     };
 
     const value: DataContextType = {
-        currentUserID, users, categories, suppliers, warehouses, products, inventory, stockMovements, purchaseOrders,
-        addCategory, updateCategory, deleteCategory,
-        addSupplier, updateSupplier, deleteSupplier,
-        addWarehouse, updateWarehouse, deleteWarehouse,
-        addProduct, updateProduct, deleteProduct,
-        addStockMovement, deleteStockMovement,
-        addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder,
-        addInventory
+        isLoading, currentUserID, users, categories, suppliers, warehouses, products, inventory, stockMovements, purchaseOrders,
+        addCategory, updateCategory, deleteCategory, addSupplier, updateSupplier, deleteSupplier, addWarehouse, updateWarehouse, deleteWarehouse,
+        addProduct, updateProduct, deleteProduct, addStockMovement, deleteStockMovement, addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, addInventory
     };
 
     return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

@@ -69,7 +69,7 @@ export function Sidebar({ activePage, onNavigate, userRole, userName, onLogout }
           <Zap size={16} color="#fff" />
         </div>
         <div>
-          <div style={{ color: "#f1f5f9", fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>Electronics Corp</div>
+          <div style={{ color: "#f1f5f9", fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>CARBS Technologies</div>
           <div style={{ color: "#64748b", fontSize: 11 }}>Inventory System</div>
         </div>
       </div>

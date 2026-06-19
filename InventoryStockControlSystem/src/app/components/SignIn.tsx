@@ -93,13 +93,13 @@ export function SignIn({ onLogin }: SignInProps) {
               <Zap size={22} color="#ffffff" />
             </div>
             <div>
-              <div style={{ color: "#f1f5f9", fontWeight: 700, fontSize: 16, lineHeight: 1.2 }}>Electronics Corp</div>
+              <div style={{ color: "#f1f5f9", fontWeight: 700, fontSize: 16, lineHeight: 1.2 }}>Carbs Technologies</div>
               <div style={{ color: "#64748b", fontSize: 12 }}>Inventory System</div>
             </div>
           </div>
           <div className="mb-10">
             <h1 style={{ color: "#f1f5f9", fontSize: 48, fontWeight: 800, lineHeight: 1.1, letterSpacing: "-0.02em", margin: 0 }}>
-              Electronics<br />Corp<br /><span style={{ color: "#3b82f6" }}>ISCS</span>
+              Inventory and<br />Stock Control<br /><span style={{ color: "#3b82f6" }}>System</span>
             </h1>
           </div>
           {error && <div className="mb-4 px-4 py-2 rounded-lg" style={{ background: "#ef444418", color: "#f87171", fontSize: 13 }}>{error}</div>}

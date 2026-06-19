@@ -85,7 +85,7 @@ export function Warehouses({ canAdd = true, canModify = true }: { canAdd?: boole
       <Modal title="Confirm Action" open={!!confirmAction} onClose={() => setConfirmAction(null)} onSubmit={executeAction} submitLabel="Yes, Proceed" size="sm">
         <div className="p-2 text-sm text-gray-800">
           Are you sure you want to <strong>{confirmAction === "add" ? "add this new" : confirmAction === "edit" ? "save changes to this" : "delete this"}</strong> facility?
-          {confirmAction === "delete" && <div className="mt-2 text-xs text-red-500 font-medium">Warning: Deleting a warehouse will orphan all associated inventory records.</div>}
+          {confirmAction === "delete" && <div className="mt-2 text-xs text-red-500 font-medium">Warning: You won't be able to delete a warehouse with associated products.</div>}
         </div>
       </Modal>
     </div>

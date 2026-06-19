@@ -61,6 +61,14 @@ namespace InventoryBackend.Controllers
                     await conn.OpenAsync();
                     await cmd.ExecuteNonQueryAsync();
                 }
+
+                using (var conn2 = new MySqlConnection(_connectionString))
+                using (var cmd2 = new MySqlCommand("DELETE FROM Inventory WHERE ProductQuantity <= 0", conn2))
+                {
+                    await conn2.OpenAsync();
+                    await cmd2.ExecuteNonQueryAsync();
+                }
+
                 return Ok(new { message = "Inventory manually updated successfully!" });
             }
             catch (MySqlException ex) { return this.HandleDbError(ex); }

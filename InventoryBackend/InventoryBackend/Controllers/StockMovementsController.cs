@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System;
+using Microsoft.AspNetCore.Mvc;
 using MySql.Data.MySqlClient;
 using InventoryBackend.Models;
 using InventoryBackend.Utils;
@@ -49,6 +50,30 @@ namespace InventoryBackend.Controllers
         {
             try
             {
+                bool reducesStock = request.MovementType == "Stock Out" ||
+                                    request.MovementType == "Transfer" ||
+                                    (request.MovementType == "Adjustment" && request.MovementQuantity < 0);
+
+                int deductionAmount = request.MovementType == "Adjustment" ? Math.Abs(request.MovementQuantity) : request.MovementQuantity;
+
+                if (reducesStock)
+                {
+                    int currentStock = 0;
+                    using (var conn = new MySqlConnection(_connectionString))
+                    using (var cmd = new MySqlCommand("sp_GetStockAvailability", conn))
+                    {
+                        cmd.CommandType = CommandType.StoredProcedure;
+                        cmd.Parameters.AddWithValue("@p_ProductID", request.ProductID);
+                        cmd.Parameters.AddWithValue("@p_WarehouseID", request.WarehouseID);
+                        await conn.OpenAsync();
+                        var result = await cmd.ExecuteScalarAsync();
+                        if (result != null && result != DBNull.Value) currentStock = Convert.ToInt32(result);
+                    }
+
+                    if (currentStock < deductionAmount)
+                        return BadRequest(new { message = $"Action denied. Only {currentStock} units available in this warehouse. You cannot remove {deductionAmount}." });
+                }
+
                 using (var conn = new MySqlConnection(_connectionString))
                 using (var cmd = new MySqlCommand("sp_InsertStockMovement", conn))
                 {
@@ -62,6 +87,28 @@ namespace InventoryBackend.Controllers
                     await conn.OpenAsync();
                     await cmd.ExecuteNonQueryAsync();
                 }
+
+                using (var conn2 = new MySqlConnection(_connectionString))
+                using (var cmd2 = new MySqlCommand("sp_CleanupInventory", conn2))
+                {
+                    cmd2.CommandType = CommandType.StoredProcedure;
+                    await conn2.OpenAsync();
+                    await cmd2.ExecuteNonQueryAsync();
+                }
+
+                if (reducesStock)
+                {
+                    using (var connAuto = new MySqlConnection(_connectionString))
+                    using (var cmdAuto = new MySqlCommand("sp_AutoDraftReorder", connAuto))
+                    {
+                        cmdAuto.CommandType = CommandType.StoredProcedure;
+                        cmdAuto.Parameters.AddWithValue("@p_ProductID", request.ProductID);
+                        cmdAuto.Parameters.AddWithValue("@p_ProcessedBy", request.ProcessedBy);
+                        await connAuto.OpenAsync();
+                        await cmdAuto.ExecuteNonQueryAsync();
+                    }
+                }
+
                 return Ok(new { message = "Movement recorded!" });
             }
             catch (MySqlException ex) { return this.HandleDbError(ex); }

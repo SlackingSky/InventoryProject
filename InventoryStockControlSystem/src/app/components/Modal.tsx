@@ -1,11 +1,11 @@
-import React, { useEffect } from "react";
-import { X } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { X, Loader2 } from "lucide-react";
 
 interface ModalProps {
   title: string;
   open: boolean;
   onClose: () => void;
-  onSubmit?: () => void;
+  onSubmit?: () => void | Promise<void>;
   submitLabel?: string;
   submitColor?: string;
   size?: "sm" | "md" | "lg";
@@ -13,13 +13,29 @@ interface ModalProps {
 }
 
 export function Modal({ title, open, onClose, onSubmit, submitLabel = "Save", submitColor, size = "md", children }: ModalProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    if (open) setIsSubmitting(false);
+  }, [open]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape" && !isSubmitting) onClose(); };
     if (open) window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose]);
+  }, [open, onClose, isSubmitting]);
 
   if (!open) return null;
+
+  const handleFormSubmit = async () => {
+    if (!onSubmit || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await onSubmit();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const widths = { sm: 420, md: 560, lg: 720 };
 
@@ -27,7 +43,7 @@ export function Modal({ title, open, onClose, onSubmit, submitLabel = "Save", su
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(2px)" }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => { if (e.target === e.currentTarget && !isSubmitting) onClose(); }}
     >
       <div
         className="rounded-xl flex flex-col overflow-hidden"
@@ -36,7 +52,12 @@ export function Modal({ title, open, onClose, onSubmit, submitLabel = "Save", su
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
           <h3 style={{ color: "var(--foreground)", margin: 0 }}>{title}</h3>
-          <button onClick={onClose} className="rounded-lg p-1 transition-colors hover:bg-[var(--muted)]" style={{ color: "var(--muted-foreground)" }}>
+          <button 
+            onClick={onClose} 
+            disabled={isSubmitting}
+            className="rounded-lg p-1 transition-colors hover:bg-[var(--muted)] disabled:opacity-50 disabled:cursor-not-allowed" 
+            style={{ color: "var(--muted-foreground)" }}
+          >
             <X size={18} />
           </button>
         </div>
@@ -49,17 +70,20 @@ export function Modal({ title, open, onClose, onSubmit, submitLabel = "Save", su
           <div className="flex items-center justify-end gap-3 px-5 py-4" style={{ borderTop: "1px solid var(--border)" }}>
             <button
               onClick={onClose}
-              className="px-4 py-2 rounded-lg transition-colors hover:bg-[var(--muted)]"
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-lg transition-colors hover:bg-[var(--muted)] disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ fontSize: 13, color: "var(--muted-foreground)", border: "1px solid var(--border)" }}
             >
               Cancel
             </button>
             <button
-              onClick={onSubmit}
-              className="px-4 py-2 rounded-lg transition-opacity hover:opacity-90"
+              onClick={handleFormSubmit}
+              disabled={isSubmitting}
+              className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-opacity hover:opacity-90 disabled:opacity-70 disabled:cursor-not-allowed"
               style={{ fontSize: 13, fontWeight: 500, background: submitColor ?? "var(--primary)", color: submitColor ? "#fff" : "var(--primary-foreground)" }}
             >
-              {submitLabel}
+              {isSubmitting && <Loader2 size={14} className="animate-spin" />}
+              {isSubmitting ? "Processing..." : submitLabel}
             </button>
           </div>
         )}
@@ -88,15 +112,8 @@ export function Field({ label, required, children, hint }: FieldProps) {
 }
 
 const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "8px 12px",
-  borderRadius: 8,
-  border: "1px solid var(--border)",
-  background: "var(--input-background)",
-  color: "var(--foreground)",
-  fontSize: 13,
-  outline: "none",
-  boxSizing: "border-box",
+  width: "100%", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)",
+  background: "var(--input-background)", color: "var(--foreground)", fontSize: 13, outline: "none", boxSizing: "border-box",
 };
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {

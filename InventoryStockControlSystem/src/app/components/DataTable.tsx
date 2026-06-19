@@ -1,5 +1,29 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Search, ChevronUp, ChevronDown } from "lucide-react";
+
+export function MonoValue({ value }: { value: string | number }) {
+  return (
+    <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--foreground)" }}>
+      {value}
+    </span>
+  );
+}
+
+export function Badge({ label, color }: { label: string; color: string }) {
+  return (
+    <span style={{
+      backgroundColor: `${color}22`,
+      color: color,
+      padding: "2px 8px",
+      borderRadius: "9999px",
+      fontSize: 12,
+      fontWeight: 600,
+      whiteSpace: "nowrap"
+    }}>
+      {label}
+    </span>
+  );
+}
 
 interface Column<T> {
   key: string;
@@ -7,7 +31,7 @@ interface Column<T> {
   render?: (row: T) => React.ReactNode;
   sortable?: boolean;
   width?: string;
-  align?: "left" | "center";
+  align?: "left" | "center" | "right";
 }
 
 interface DataTableProps<T> {
@@ -17,7 +41,7 @@ interface DataTableProps<T> {
   data: T[];
   searchFields?: (keyof T)[];
   actions?: React.ReactNode;
-  rowKey: (row: T) => string;
+  rowKey: (row: T) => string | number;
 }
 
 export function DataTable<T>({ title, subtitle, columns, data, searchFields, actions, rowKey }: DataTableProps<T>) {
@@ -25,34 +49,47 @@ export function DataTable<T>({ title, subtitle, columns, data, searchFields, act
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
-  const filtered = searchFields
-    ? data.filter((row) =>
-        searchFields.some((field) =>
-          String(row[field] ?? "").toLowerCase().includes(search.toLowerCase())
-        )
+  const filtered = useMemo(() => {
+    if (!searchFields || !search) return data;
+    const lowerSearch = search.toLowerCase();
+    return data.filter((row) =>
+      searchFields.some((field) =>
+        String(row[field] ?? "").toLowerCase().includes(lowerSearch)
       )
-    : data;
+    );
+  }, [data, search, searchFields]);
 
-  const sorted = sortCol
-    ? [...filtered].sort((a, b) => {
-        const aVal = String((a as Record<string, unknown>)[sortCol] ?? "");
-        const bVal = String((b as Record<string, unknown>)[sortCol] ?? "");
-        return sortDir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-      })
-    : filtered;
+  const sorted = useMemo(() => {
+    if (!sortCol) return filtered;
+    return [...filtered].sort((a, b) => {
+      const aRaw = (a as any)[sortCol];
+      const bRaw = (b as any)[sortCol];
+
+      if (typeof aRaw === "number" && typeof bRaw === "number") {
+        return sortDir === "asc" ? aRaw - bRaw : bRaw - aRaw;
+      }
+
+      const aVal = String(aRaw ?? "").toLowerCase();
+      const bVal = String(bRaw ?? "").toLowerCase();
+      return sortDir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+    });
+  }, [filtered, sortCol, sortDir]);
 
   const toggleSort = (col: string) => {
-    if (sortCol === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortCol(col); setSortDir("asc"); }
+    if (sortCol === col) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
   };
 
   return (
-    <div className="rounded-xl overflow-hidden" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
-      {/* Header */}
+    <div className="rounded-xl overflow-hidden shadow-sm" style={{ background: "var(--card)", border: "1px solid var(--border)" }}>
       <div className="flex items-center justify-between gap-4 px-5 py-4" style={{ borderBottom: "1px solid var(--border)" }}>
         <div>
-          <h2 style={{ color: "var(--foreground)", marginBottom: 2 }}>{title}</h2>
-          {subtitle && <p style={{ color: "var(--muted-foreground)", fontSize: 12 }}>{subtitle}</p>}
+          <h2 className="font-bold text-lg" style={{ color: "var(--foreground)", marginBottom: 2 }}>{title}</h2>
+          {subtitle && <p style={{ color: "var(--muted-foreground)", fontSize: 13 }}>{subtitle}</p>}
         </div>
         <div className="flex items-center gap-3">
           {searchFields && (
@@ -63,15 +100,8 @@ export function DataTable<T>({ title, subtitle, columns, data, searchFields, act
                 placeholder="Search..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 pr-3 py-1.5 rounded-lg"
-                style={{
-                  background: "var(--input-background)",
-                  border: "1px solid var(--border)",
-                  color: "var(--foreground)",
-                  fontSize: 13,
-                  outline: "none",
-                  width: 200,
-                }}
+                className="pl-8 pr-4 py-1.5 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                style={{ background: "var(--background)", border: "1px solid var(--border)", color: "var(--foreground)" }}
               />
             </div>
           )}
@@ -79,108 +109,51 @@ export function DataTable<T>({ title, subtitle, columns, data, searchFields, act
         </div>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full" style={{ fontSize: 13, borderCollapse: "collapse" }}>
+        <table className="w-full text-sm text-left border-collapse">
           <thead>
-            <tr style={{ background: "var(--muted)" }}>
-              {columns.map((col) => {
-                const align = col.align ?? "center";
-                return (
-                  <th
-                    key={col.key}
-                    onClick={() => col.sortable && toggleSort(col.key)}
-                    className="px-4 py-3"
-                    style={{
-                      textAlign: align,
-                      color: "var(--muted-foreground)",
-                      fontWeight: 600,
-                      fontSize: 11,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      cursor: col.sortable ? "pointer" : "default",
-                      width: col.width,
-                      userSelect: "none",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                        justifyContent: align === "left" ? "flex-start" : "center",
-                      }}
-                    >
-                      {col.label}
-                      {col.sortable && (
-                        <span style={{ color: sortCol === col.key ? "var(--primary)" : "var(--border)" }}>
-                          {sortDir === "asc" || sortCol !== col.key ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                        </span>
-                      )}
-                    </span>
-                  </th>
-                );
-              })}
+            <tr style={{ background: "var(--muted)", borderBottom: "1px solid var(--border)" }}>
+              {columns.map((col) => (
+                <th
+                  key={col.key}
+                  className={`px-5 py-3 font-semibold text-xs tracking-wider uppercase ${col.sortable ? "cursor-pointer hover:bg-black/5 transition-colors select-none" : ""}`}
+                  style={{ color: "var(--muted-foreground)", width: col.width, textAlign: col.align || "left" }}
+                  onClick={() => col.sortable && toggleSort(col.key)}
+                >
+                  <div className={`flex items-center gap-1.5 ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : 'justify-start'}`}>
+                    {col.label}
+                    {col.sortable && (
+                      <div className="flex flex-col opacity-50">
+                        <ChevronUp size={10} className={sortCol === col.key && sortDir === "asc" ? "opacity-100 text-blue-500" : "-mb-1"} />
+                        <ChevronDown size={10} className={sortCol === col.key && sortDir === "desc" ? "opacity-100 text-blue-500" : ""} />
+                      </div>
+                    )}
+                  </div>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {sorted.length === 0 ? (
+            {sorted.length > 0 ? (
+              sorted.map((row) => (
+                <tr key={rowKey(row)} className="transition-colors hover:bg-black/[0.02]" style={{ borderBottom: "1px solid var(--border)" }}>
+                  {columns.map((col) => (
+                    <td key={col.key} className="px-5 py-3" style={{ color: "var(--foreground)", textAlign: col.align || "left" }}>
+                      {col.render ? col.render(row) : String((row as any)[col.key] ?? "")}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : (
               <tr>
-                <td colSpan={columns.length} className="py-10 text-center" style={{ color: "var(--muted-foreground)", fontSize: 13 }}>
+                <td colSpan={columns.length} className="px-5 py-8 text-center" style={{ color: "var(--muted-foreground)" }}>
                   No records found.
                 </td>
               </tr>
-            ) : (
-              sorted.map((row, idx) => (
-                <tr
-                  key={rowKey(row)}
-                  style={{ borderBottom: idx < sorted.length - 1 ? "1px solid var(--border)" : "none" }}
-                  className="transition-colors hover:bg-[var(--muted)]"
-                >
-                  {columns.map((col) => {
-                    const align = col.align ?? "center";
-                    return (
-                      <td
-                        key={col.key}
-                        className="px-4 py-3"
-                        style={{ textAlign: align, color: "var(--foreground)", verticalAlign: "middle" }}
-                      >
-                        {col.render ? col.render(row) : String((row as Record<string, unknown>)[col.key] ?? "")}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))
             )}
           </tbody>
         </table>
       </div>
-
-      {/* Footer */}
-      <div className="px-5 py-3 flex items-center justify-between" style={{ borderTop: "1px solid var(--border)" }}>
-        <span style={{ color: "var(--muted-foreground)", fontSize: 12 }}>
-          {sorted.length} of {data.length} record{data.length !== 1 ? "s" : ""}
-          {search && ` matching "${search}"`}
-        </span>
-      </div>
     </div>
-  );
-}
-
-export function Badge({ label, color }: { label: string; color: string }) {
-  return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full"
-      style={{ background: color + "18", color, fontSize: 11, fontWeight: 600 }}
-    >
-      {label}
-    </span>
-  );
-}
-
-export function MonoValue({ value }: { value: string | number }) {
-  return (
-    <span style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>{value}</span>
   );
 }
